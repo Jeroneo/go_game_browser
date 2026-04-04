@@ -1,6 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bullseye
 
-# 1. Install system dependencies (ADDED libgomp1 for OpenMP CPU threading)
+# 1. Install system dependencies (Added libssl1.1 for KataGo compatibility)
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -8,11 +8,12 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     zlib1g-dev \
     libgomp1 \
+    libssl1.1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 2. Download KataGo (Eigen CPU version for linux-x64)
+# 2. Download KataGo (Eigen CPU version)
 RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/katago-v1.14.1-eigen-linux-x64.zip -O katago.zip \
     && unzip katago.zip \
     && chmod +x katago \

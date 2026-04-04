@@ -4,6 +4,10 @@ on:
   push:
     branches: [ "main" ]
 
+# Tell GitHub Actions to use the newer Node 24 to get rid of the deprecation warning
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -23,14 +27,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # NEW STEP: Convert the repository name to lowercase and save it as an environment variable
-      - name: Convert repository name to lowercase
-        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+      - name: Convert owner to lowercase
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Use the new lowercase environment variable here instead of github.repository
-          tags: ghcr.io/${{ env.REPO_LC }}/katago-web:latest
+          tags: ghcr.io/${{ env.OWNER_LC }}/katago-web:latest
