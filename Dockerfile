@@ -14,8 +14,6 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # 2. Fix the missing libzip.so.5 error
-# KataGo expects libzip5, but Debian natively provides libzip4.
-# We download the specific library from the Ubuntu 20.04 archives to satisfy KataGo.
 RUN wget -q http://mirrors.kernel.org/ubuntu/pool/universe/libz/libzip/libzip5_1.5.1-0ubuntu1_amd64.deb \
     && apt-get update \
     && apt-get install -y ./libzip5_1.5.1-0ubuntu1_amd64.deb \
@@ -31,8 +29,9 @@ RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/kata
 # 4. Download a fast 15-block neural network model for KataGo
 RUN curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o model.bin.gz https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b15c192-s1672170752-d466197061.bin.gz
 
-# 5. Create a basic GTP configuration for KataGo
-RUN echo "logSearchInfo = false\n\
+# 5. Create a basic GTP configuration for KataGo (Added the missing log settings)
+RUN echo "logAllGTPCommunication = false\n\
+logSearchInfo = false\n\
 numSearchThreads = 4\n" > gtp_config.cfg
 
 # 6. Copy Python requirements and install
