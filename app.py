@@ -3,7 +3,6 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import subprocess
 import time
-import os
 
 app = FastAPI()
 
@@ -17,48 +16,48 @@ KATAGO_CMD = [
 ]
 
 print("Starting KataGo engine...")
-try:
-    katago_process = subprocess.Popen(
-        KATAGO_CMD,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1
-    )
-    time.sleep(2) # Give KataGo a moment to load the neural net into memory
-    print("KataGo is ready!")
-except Exception as e:
-    print(f"ERROR starting KataGo: {e}")
+katago_process = subprocess.Popen(
+    KATAGO_CMD,
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL, # We drop stderr so the buffer doesn't fill up and freeze KataGo
+    text=True,
+    bufsize=1
+)
+time.sleep(2) # Give KataGo a moment to load the neural net into memory
 
 def send_gtp_command(command: str) -> str:
-    """Sends a command to KataGo via standard input and reads the response."""
+    """Sends a command to KataGo and safely reads the standard GTP response."""
     katago_process.stdin.write(command + "\n")
     katago_process.stdin.flush()
     
     response = ""
     while True:
         line = katago_process.stdout.readline()
+        if line == "":
+            raise ValueError("KataGo engine stopped running.")
         if line == "\n":
-            break
+            if response != "":
+                break # A blank line signifies the end of the GTP response block
+            else:
+                continue # Ignore leading empty lines
         response += line
     
+    # GTP success responses start with '='. Errors start with '?'
     if response.startswith("="):
         return response[1:].strip()
     else:
-        raise ValueError(f"KataGo Error: {response.strip()}")
+        raise ValueError(f"KataGo rejected '{command}': {response.strip()}")
 
 class GameState(BaseModel):
     history: list[str]  
     difficulty: str     
-    board_size: int = 9 
+    board_size: int = 19 
 
-# Serve the Frontend HTML
 @app.get("/")
 async def serve_frontend():
     return FileResponse("index.html")
 
-# AI Compute Endpoint
 @app.post("/api/move")
 async def play_move(state: GameState):
     visits_map = {
@@ -69,23 +68,29 @@ async def play_move(state: GameState):
     max_visits = visits_map.get(state.difficulty, 100)
 
     try:
-        # Sync board state
+        # 1. Clear the board BEFORE resizing, and once more after just to be safe
+        send_gtp_command("clear_board")
         send_gtp_command(f"boardsize {state.board_size}")
         send_gtp_command("clear_board")
-        send_gtp_command(f"kata-set-param maxVisits {max_visits}")
+        
+        # 2. Try to set difficulty, but gracefully ignore if KataGo rejects runtime parameter changes
+        try:
+            send_gtp_command(f"kata-set-param maxVisits {max_visits}")
+        except Exception as e:
+            print(f"Non-fatal warning: {e}")
 
-        # Replay history
+        # 3. Replay history to sync the board
         colors = ["black", "white"]
         for idx, move in enumerate(state.history):
             color = colors[idx % 2]
             send_gtp_command(f"play {color} {move}")
 
-        # Calculate AI move based on whose turn it is
+        # 4. Generate AI move
         ai_color = colors[len(state.history) % 2]
         ai_move = send_gtp_command(f"genmove {ai_color}")
 
         return {"ai_move": ai_move}
 
     except Exception as e:
-        print(f"Error communicating with KataGo: {e}")
+        print(f"Backend Game Error: {e}")
         return {"ai_move": "PASS"}

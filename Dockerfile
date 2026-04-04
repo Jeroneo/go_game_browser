@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# 1. Install system dependencies (added curl here)
+# 1. Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -11,19 +11,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 2. Download KataGo (Eigen CPU version for broad compatibility)
+# 2. Download KataGo (Eigen CPU version)
 RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/katago-v1.14.1-eigen-linux-x64.zip -O katago.zip \
     && unzip katago.zip \
     && chmod +x katago \
     && rm katago.zip
 
-# 3. Download a fast 15-block neural network model for KataGo 
-# (Using curl and a User-Agent to bypass Cloudflare bot protection)
+# 3. Download a fast 15-block neural network model for KataGo
 RUN curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o model.bin.gz https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b15c192-s1672170752-d466197061.bin.gz
 
-# 4. Create a basic GTP configuration for KataGo to restrict threads and logging
-RUN echo "logDir = gtp_logs\n\
-logSearchInfo = false\n\
+# 4. Create a basic GTP configuration for KataGo (Removed log directory requirement)
+RUN echo "logSearchInfo = false\n\
 numSearchThreads = 4\n" > gtp_config.cfg
 
 # 5. Copy Python requirements and install
