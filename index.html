@@ -211,30 +211,48 @@
             ctx.stroke();
             const hoshi = [4, 10, 16]; ctx.fillStyle = '#1a110a';
             hoshi.forEach(x => hoshi.forEach(y => { ctx.beginPath(); ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI); ctx.fill(); }));
-            
-            Object.entries(boardState).forEach(([coord, color]) => {
-                const p = getPixels(coord), r = cellSize * 0.48;
-                ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 4; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.shadowColor = 'transparent';
-                const g = ctx.createRadialGradient(p.x-r*0.3, p.y-r*0.3, r*0.1, p.x, p.y, r);
-                if (color === 'black') { g.addColorStop(0, '#3a3a3a'); g.addColorStop(1, '#000'); } else { g.addColorStop(0, '#fff'); g.addColorStop(1, '#c2b6a3'); }
-                ctx.fillStyle = g; ctx.fill();
-            });
+            Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
 
             if (moveHistory.length > 0) {
                 const last = moveHistory[moveHistory.length - 1];
-                if (last !== "PASS") {
-                    const p = getPixels(last); ctx.beginPath(); ctx.strokeStyle = (boardState[last] === 'black') ? '#e8dcc4' : '#000';
-                    ctx.lineWidth = 2.5; ctx.arc(p.x, p.y, cellSize * 0.18, 0, 2 * Math.PI); ctx.stroke();
+                if (last.toUpperCase() !== "PASS") {
+                    const pos = getPixels(last);
+                    ctx.beginPath(); ctx.strokeStyle = (boardState[last] === 'black') ? 'rgba(232, 220, 196, 0.8)' : 'rgba(0, 0, 0, 0.7)';
+                    ctx.lineWidth = 2.5; ctx.arc(pos.x, pos.y, cellSize * 0.18, 0, 2 * Math.PI); ctx.stroke();
                 }
             }
             updateDifficultyState();
         }
 
+        function drawStone(coord, color) {
+            const p = getPixels(coord), r = cellSize * 0.48;
+            ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+            ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.shadowColor = 'transparent';
+            const g = ctx.createRadialGradient(p.x-r*0.3, p.y-r*0.3, r*0.1, p.x, p.y, r);
+            if (color === 'black') { g.addColorStop(0, '#3a3a3a'); g.addColorStop(1, '#000'); }
+            else { g.addColorStop(0, '#fff'); g.addColorStop(1, '#c2b6a3'); }
+            ctx.fillStyle = g; ctx.fill();
+        }
+
         function getPixels(c) { return { x: (columns.indexOf(c[0]) + 1) * cellSize, y: (boardSize - parseInt(c.substring(1)) + 1) * cellSize }; }
+        function getGoCoord(x, y) {
+            const col = Math.round(x / cellSize) - 1, row = Math.round(y / cellSize);
+            return (col >= 0 && col < boardSize && row >= 1 && row <= boardSize) ? columns[col] + (boardSize - row + 1) : null;
+        }
+
+        // Formats GTP score (B+7.5) to human-readable (Black wins by 7.5)
         function formatScore(s) {
-            if (!s || s === "Error") return "Counting...";
-            if (s.includes("R")) return s.startsWith("B") ? "Black Wins (黑中盤勝)" : "White Wins (白中盤勝)";
-            return (s.startsWith("B") ? "Black (黑勝) " : "White (白勝) ") + "+" + (s.includes('+') ? s.split('+')[1] : s);
+            if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
+            
+            // Handle Resignation (B+R or W+R)
+            if (s.includes("R")) {
+                return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
+            }
+            
+            // Handle Normal Score (B+12.5)
+            const winner = s.startsWith("B") ? "Black (黑勝)" : "White (白勝)";
+            const points = s.includes("+") ? s.split("+")[1] : s;
+            return `${winner} +${points} pts`;
         }
 
         async function fetchMove() {
@@ -242,71 +260,56 @@
                 const res = await fetch('/api/move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value })
+                    body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value, board_size: boardSize })
                 });
-                const data = await res.json();
-                
-                // Only update if the backend actually sent stones
-                if (data.stones && Object.keys(data.stones).length > 0) {
-                    boardState = data.stones; 
-                }
-                return data;
-            } catch (e) { 
-                console.error("Fetch error:", e);
-                return { ai_move: "PASS" }; 
+                return await res.json();
+            } catch (e) { return { ai_move: "PASS", score: "Error" }; }
+        }
+
+        async function runSelfPlay() {
+            if (!isSelfPlayActive) return;
+            const turn = moveHistory.length % 2 === 0 ? "Black" : "White";
+            statusEl.innerText = `Thinking (${turn})...`;
+            const data = await fetchMove();
+            if (data.ai_move.toUpperCase() === "PASS" || data.ai_move.toUpperCase() === "RESIGN") {
+                statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
+                isSelfPlayActive = false; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+                return;
             }
+            boardState[data.ai_move] = turn.toLowerCase(); moveHistory.push(data.ai_move);
+            drawBoard(); setTimeout(runSelfPlay, 600);
+        }
+
+        function toggleSelfPlay() {
+            isSelfPlayActive = !isSelfPlayActive;
+            if (isSelfPlayActive) { selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>"; isPlayerTurn = false; runSelfPlay(); }
+            else { selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>"; isPlayerTurn = true; statusEl.innerText = "Paused. Your Turn."; }
         }
 
         canvas.addEventListener('click', async (e) => {
             if (!isPlayerTurn || isSelfPlayActive) return;
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) * (canvas.width / rect.width), y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            const col = Math.round(x / cellSize) - 1, row = Math.round(y / cellSize);
-            const coord = (col >= 0 && col < 19 && row >= 1 && row <= 19) ? columns[col] + (19 - row + 1) : null;
+            const coord = getGoCoord(x, y);
 
             if (coord && !boardState[coord]) {
-                // Place your stone immediately (Optimistic UI)
-                boardState[coord] = 'black'; 
-                moveHistory.push(coord); 
-                drawBoard(); // Redraw immediately so you see your stone
-                
-                isPlayerTurn = false; 
+                boardState[coord] = 'black'; moveHistory.push(coord); drawBoard(); isPlayerTurn = false;
                 statusEl.innerText = "KataGo is thinking...";
-                
                 const data = await fetchMove();
-                
                 if (data.ai_move.toUpperCase() !== "PASS" && data.ai_move.toUpperCase() !== "RESIGN") {
-                    moveHistory.push(data.ai_move);
+                    boardState[data.ai_move] = 'white'; moveHistory.push(data.ai_move);
                     statusEl.innerText = "Your Turn (Black)";
                 } else {
-                    statusEl.innerHTML = `<span class="win-highlight">${formatScore(data.score)}</span>`;
+                    statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
                 }
-                
-                drawBoard(); // Redraw again to show AI stone and any captures
-                isPlayerTurn = true;
+                drawBoard(); isPlayerTurn = true;
             }
         });
 
-        async function runSelfPlay() {
-            if (!isSelfPlayActive) return;
-            statusEl.innerText = "AI is thinking...";
-            const data = await fetchMove();
-            if (data.ai_move.toUpperCase() === "PASS" || data.ai_move.toUpperCase() === "RESIGN") {
-                statusEl.innerHTML = `<span class="win-highlight">${formatScore(data.score)}</span>`;
-                isSelfPlayActive = false; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
-                drawBoard(); return;
-            }
-            moveHistory.push(data.ai_move); drawBoard();
-            setTimeout(runSelfPlay, 500);
+        function resetGame() {
+            boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false;
+            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>"; statusEl.innerText = "Your Turn (Black)"; drawBoard();
         }
-
-        function toggleSelfPlay() {
-            isSelfPlayActive = !isSelfPlayActive;
-            if (isSelfPlayActive) { selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>"; isPlayerTurn = false; runSelfPlay(); }
-            else { selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>"; isPlayerTurn = true; statusEl.innerText = "Paused."; }
-        }
-
-        function resetGame() { boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false; statusEl.innerText = "Your Turn (Black)"; drawBoard(); }
         drawBoard();
     </script>
 </body>
