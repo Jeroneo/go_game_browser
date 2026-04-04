@@ -123,6 +123,12 @@
         .btn-self-play { color: var(--gold-accent); border-color: var(--gold-accent); }
         .btn-self-play:hover { background-color: var(--gold-accent); color: var(--bg-ink); }
 
+        .btn-pass { color: #7aab8a; border-color: #7aab8a; }
+        .btn-pass:hover { background-color: #7aab8a; color: var(--bg-ink); }
+        .btn-pass:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+        .illegal-flash { color: #e05a5a; }
+
         .status-box {
             margin-top: 15px;
             padding: 12px;
@@ -172,6 +178,7 @@
                 </select>
 
                 <button onclick="resetGame()">重新開始<br><small style="font-weight:normal; font-size: 0.7rem;">New Game</small></button>
+                <button class="btn-pass" id="passBtn" onclick="playerPass()">虛手<br><small style="font-weight:normal; font-size: 0.7rem;">Pass Turn</small></button>
                 <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<br><small style="font-weight:normal; font-size: 0.7rem;">AI Self-Play</small></button>
             </div>
             
@@ -194,77 +201,107 @@
 
     <script>
         const canvas = document.getElementById('goBoard'), ctx = canvas.getContext('2d');
-        const statusEl = document.getElementById('status'), selfPlayBtn = document.getElementById('selfPlayBtn'), diffSelect = document.getElementById('difficulty');
-        
-        const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST"; 
-        let boardState = {}, moveHistory = [], isPlayerTurn = true, isSelfPlayActive = false, isGameOver = false;
+        const statusEl  = document.getElementById('status');
+        const selfPlayBtn = document.getElementById('selfPlayBtn');
+        const passBtn     = document.getElementById('passBtn');
+        const diffSelect  = document.getElementById('difficulty');
+
+        const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST";
+
+        // ── Mutable game state ──
+        let boardState       = {};   // coord → 'black'|'white'
+        let moveHistory      = [];   // GTP move list sent to backend
+        let boardHistory     = [];   // serialised board after each half-move (for Ko)
+        let consecutivePasses = 0;
+        let isPlayerTurn     = true;
+        let isSelfPlayActive = false;
+        let isGameOver       = false;
 
         // ─────────────────────────────────────────────
-        // Go capture logic
+        // Go rules
         // ─────────────────────────────────────────────
 
-        /** Returns the up to 4 valid board neighbours of a GTP coordinate. */
         function getNeighbors(coord) {
-            const col = columns.indexOf(coord[0]);
-            const row = parseInt(coord.substring(1));
-            const neighbors = [];
-            if (col > 0)           neighbors.push(columns[col - 1] + row);
-            if (col < boardSize - 1) neighbors.push(columns[col + 1] + row);
-            if (row > 1)           neighbors.push(coord[0] + (row - 1));
-            if (row < boardSize)   neighbors.push(coord[0] + (row + 1));
-            return neighbors;
+            const col = columns.indexOf(coord[0]), row = parseInt(coord.substring(1));
+            const nb = [];
+            if (col > 0)            nb.push(columns[col - 1] + row);
+            if (col < boardSize - 1) nb.push(columns[col + 1] + row);
+            if (row > 1)            nb.push(coord[0] + (row - 1));
+            if (row < boardSize)    nb.push(coord[0] + (row + 1));
+            return nb;
         }
 
-        /** Flood-fills all connected stones of the same colour starting from coord. */
         function getGroup(coord, state) {
-            const color = state[coord];
-            const group = new Set();
-            const queue = [coord];
-            while (queue.length > 0) {
+            const color = state[coord], group = new Set(), queue = [coord];
+            while (queue.length) {
                 const c = queue.pop();
                 if (group.has(c)) continue;
                 group.add(c);
-                getNeighbors(c).forEach(n => {
-                    if (state[n] === color && !group.has(n)) queue.push(n);
-                });
+                getNeighbors(c).forEach(n => { if (state[n] === color && !group.has(n)) queue.push(n); });
             }
             return group;
         }
 
-        /** Counts empty intersections adjacent to the group (its liberties). */
         function getLiberties(group, state) {
-            const liberties = new Set();
-            group.forEach(coord => {
-                getNeighbors(coord).forEach(n => {
-                    if (!state[n]) liberties.add(n);
-                });
-            });
-            return liberties;
+            const libs = new Set();
+            group.forEach(c => getNeighbors(c).forEach(n => { if (!state[n]) libs.add(n); }));
+            return libs;
+        }
+
+        /** Stable string fingerprint of a board state (for Ko detection). */
+        function serializeBoard(state) {
+            return Object.keys(state).sort().map(k => k + state[k][0]).join('');
         }
 
         /**
-         * After placing a stone of `placedColor` at `placedCoord`,
-         * removes any opponent groups that now have zero liberties.
-         * Also removes the placed stone's own group if it has zero liberties (suicide).
+         * Validates and applies a player stone placement.
+         * Returns 'ok' | 'occupied' | 'suicide' | 'ko'
+         * On 'ok' the real boardState and boardHistory are mutated.
          */
-        function removeCaptures(placedCoord, placedColor, state) {
-            const opponentColor = placedColor === 'black' ? 'white' : 'black';
+        function tryPlaceStone(coord, color) {
+            if (boardState[coord]) return 'occupied';
 
-            // Check every neighbouring opponent group for capture
-            getNeighbors(placedCoord).forEach(n => {
-                if (state[n] === opponentColor) {
-                    const group = getGroup(n, state);
-                    if (getLiberties(group, state).size === 0) {
-                        group.forEach(c => delete state[c]);
-                    }
+            // Work on a copy so we can roll back if illegal
+            const sim = { ...boardState };
+            sim[coord] = color;
+            const opp = color === 'black' ? 'white' : 'black';
+
+            // 1. Resolve opponent captures in simulation
+            getNeighbors(coord).forEach(n => {
+                if (sim[n] === opp) {
+                    const g = getGroup(n, sim);
+                    if (getLiberties(g, sim).size === 0) g.forEach(c => delete sim[c]);
                 }
             });
 
-            // Suicide rule: remove own group if it has no liberties after captures
-            const ownGroup = getGroup(placedCoord, state);
-            if (getLiberties(ownGroup, state).size === 0) {
-                ownGroup.forEach(c => delete state[c]);
-            }
+            // 2. Suicide check — own group must still have liberties
+            if (getLiberties(getGroup(coord, sim), sim).size === 0) return 'suicide';
+
+            // 3. Ko check — resulting position must not match any prior position
+            const serial = serializeBoard(sim);
+            if (boardHistory.some(h => h === serial)) return 'ko';
+
+            // Legal — commit
+            boardHistory.push(serializeBoard(boardState));
+            Object.keys(boardState).forEach(k => delete boardState[k]);
+            Object.assign(boardState, sim);
+            return 'ok';
+        }
+
+        /**
+         * Applies an AI-generated move directly (KataGo guarantees legality).
+         * Resolves captures and records the position in boardHistory.
+         */
+        function applyAIMove(coord, color) {
+            boardState[coord] = color;
+            const opp = color === 'black' ? 'white' : 'black';
+            getNeighbors(coord).forEach(n => {
+                if (boardState[n] === opp) {
+                    const g = getGroup(n, boardState);
+                    if (getLiberties(g, boardState).size === 0) g.forEach(c => delete boardState[c]);
+                }
+            });
+            boardHistory.push(serializeBoard(boardState));
         }
 
         // ─────────────────────────────────────────────
@@ -285,12 +322,16 @@
             hoshi.forEach(x => hoshi.forEach(y => { ctx.beginPath(); ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI); ctx.fill(); }));
             Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
 
+            // Last-move marker (skip PASSes and already-captured coords)
             if (moveHistory.length > 0) {
                 const last = moveHistory[moveHistory.length - 1];
                 if (last.toUpperCase() !== "PASS" && boardState[last]) {
                     const pos = getPixels(last);
-                    ctx.beginPath(); ctx.strokeStyle = (boardState[last] === 'black') ? 'rgba(232, 220, 196, 0.8)' : 'rgba(0, 0, 0, 0.7)';
-                    ctx.lineWidth = 2.5; ctx.arc(pos.x, pos.y, cellSize * 0.18, 0, 2 * Math.PI); ctx.stroke();
+                    ctx.beginPath();
+                    ctx.strokeStyle = (boardState[last] === 'black') ? 'rgba(232,220,196,0.8)' : 'rgba(0,0,0,0.7)';
+                    ctx.lineWidth = 2.5;
+                    ctx.arc(pos.x, pos.y, cellSize * 0.18, 0, 2 * Math.PI);
+                    ctx.stroke();
                 }
             }
             updateDifficultyState();
@@ -300,13 +341,16 @@
             const p = getPixels(coord), r = cellSize * 0.48;
             ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
             ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.shadowColor = 'transparent';
-            const g = ctx.createRadialGradient(p.x-r*0.3, p.y-r*0.3, r*0.1, p.x, p.y, r);
+            const g = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, r * 0.1, p.x, p.y, r);
             if (color === 'black') { g.addColorStop(0, '#3a3a3a'); g.addColorStop(1, '#000'); }
-            else { g.addColorStop(0, '#fff'); g.addColorStop(1, '#c2b6a3'); }
+            else                   { g.addColorStop(0, '#fff');    g.addColorStop(1, '#c2b6a3'); }
             ctx.fillStyle = g; ctx.fill();
         }
 
-        function getPixels(c) { return { x: (columns.indexOf(c[0]) + 1) * cellSize, y: (boardSize - parseInt(c.substring(1)) + 1) * cellSize }; }
+        function getPixels(c) {
+            return { x: (columns.indexOf(c[0]) + 1) * cellSize, y: (boardSize - parseInt(c.substring(1)) + 1) * cellSize };
+        }
+
         function getGoCoord(x, y) {
             const col = Math.round(x / cellSize) - 1, row = Math.round(y / cellSize);
             return (col >= 0 && col < boardSize && row >= 1 && row <= boardSize) ? columns[col] + (boardSize - row + 1) : null;
@@ -318,12 +362,17 @@
 
         function formatScore(s) {
             if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
-            if (s.includes("R")) {
-                return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
-            }
+            if (s.includes("R")) return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
             const winner = s.startsWith("B") ? "Black (黑勝)" : "White (白勝)";
             const points = s.includes("+") ? s.split("+")[1] : s;
             return `${winner} +${points} pts`;
+        }
+
+        /** Briefly shows an illegal-move reason then restores the normal prompt. */
+        function showIllegal(reason) {
+            const msgs = { ko: '⛔ Illegal — Ko rule', suicide: '⛔ Illegal — Suicide', occupied: '⛔ Intersection occupied' };
+            statusEl.innerHTML = `<span class="illegal-flash">${msgs[reason] || '⛔ Illegal move'}</span>`;
+            setTimeout(() => { if (!isGameOver) statusEl.innerText = 'Your Turn (Black)'; }, 1800);
         }
 
         async function fetchMove() {
@@ -337,67 +386,151 @@
             } catch (e) { return { ai_move: "PASS", score: "Error" }; }
         }
 
+        /** Central game-over handler. */
+        function endGame(score) {
+            isGameOver = true;
+            isSelfPlayActive = false;
+            isPlayerTurn = false;
+            passBtn.disabled = true;
+            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+            statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
+        }
+
         // ─────────────────────────────────────────────
-        // Game flow
+        // Self-play
         // ─────────────────────────────────────────────
 
         async function runSelfPlay() {
             if (!isSelfPlayActive) return;
-            const turn = moveHistory.length % 2 === 0 ? "black" : "white";
-            const turnLabel = turn === "black" ? "Black" : "White";
-            statusEl.innerText = `Thinking (${turnLabel})...`;
+            const turn = moveHistory.length % 2 === 0 ? 'black' : 'white';
+            statusEl.innerText = `Thinking (${turn === 'black' ? 'Black' : 'White'})...`;
             const data = await fetchMove();
-            if (data.ai_move.toUpperCase() === "PASS" || data.ai_move.toUpperCase() === "RESIGN") {
-                statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
-                isSelfPlayActive = false; isGameOver = true; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+            const move = data.ai_move.toUpperCase();
+
+            if (move === "RESIGN") { endGame(data.score); return; }
+
+            if (move === "PASS") {
+                consecutivePasses++;
+                moveHistory.push("PASS");
+                if (consecutivePasses >= 2) { endGame(data.score); return; }
+                statusEl.innerText = `${turn === 'black' ? 'Black' : 'White'} passes...`;
+                drawBoard();
+                setTimeout(runSelfPlay, 800);
                 return;
             }
-            boardState[data.ai_move] = turn;
-            removeCaptures(data.ai_move, turn, boardState);
+
+            consecutivePasses = 0;
+            applyAIMove(data.ai_move, turn);
             moveHistory.push(data.ai_move);
-            drawBoard(); setTimeout(runSelfPlay, 600);
+            drawBoard();
+            setTimeout(runSelfPlay, 600);
         }
 
         function toggleSelfPlay() {
             isSelfPlayActive = !isSelfPlayActive;
-            if (isSelfPlayActive) { selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>"; isPlayerTurn = false; runSelfPlay(); }
-            else { selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>"; isPlayerTurn = true; statusEl.innerText = "Paused. Your Turn."; }
+            if (isSelfPlayActive) {
+                selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>";
+                passBtn.disabled = true;
+                isPlayerTurn = false;
+                runSelfPlay();
+            } else {
+                selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+                passBtn.disabled = false;
+                isPlayerTurn = true;
+                statusEl.innerText = "Paused. Your Turn.";
+            }
         }
+
+        // ─────────────────────────────────────────────
+        // Player pass
+        // ─────────────────────────────────────────────
+
+        async function playerPass() {
+            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
+            isPlayerTurn = false;
+            consecutivePasses++;
+            moveHistory.push("PASS");
+
+            statusEl.innerText = "You passed. KataGo is thinking...";
+            const data = await fetchMove();
+            const move = data.ai_move.toUpperCase();
+
+            if (move === "RESIGN") { endGame(data.score); return; }
+
+            if (move === "PASS") {
+                consecutivePasses++;
+                moveHistory.push("PASS");
+                // Two consecutive passes → game over
+                endGame(data.score);
+                return;
+            }
+
+            // KataGo played a real move — reset pass counter
+            consecutivePasses = 0;
+            applyAIMove(data.ai_move, 'white');
+            moveHistory.push(data.ai_move);
+            drawBoard();
+            statusEl.innerText = "Your Turn (Black)";
+            isPlayerTurn = true;
+        }
+
+        // ─────────────────────────────────────────────
+        // Canvas click
+        // ─────────────────────────────────────────────
 
         canvas.addEventListener('click', async (e) => {
             if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
+
             const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width), y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
             const coord = getGoCoord(x, y);
+            if (!coord) return;
 
-            if (coord && !boardState[coord]) {
-                // Place player's black stone and resolve captures
-                boardState[coord] = 'black';
-                removeCaptures(coord, 'black', boardState);
-                moveHistory.push(coord);
-                drawBoard();
-                isPlayerTurn = false;
-                statusEl.innerText = "KataGo is thinking...";
+            // Validate & apply (suicide + Ko handled inside)
+            const result = tryPlaceStone(coord, 'black');
+            if (result !== 'ok') { showIllegal(result); return; }
 
-                const data = await fetchMove();
-                if (data.ai_move.toUpperCase() !== "PASS" && data.ai_move.toUpperCase() !== "RESIGN") {
-                    // Place KataGo's white stone and resolve captures
-                    boardState[data.ai_move] = 'white';
-                    removeCaptures(data.ai_move, 'white', boardState);
-                    moveHistory.push(data.ai_move);
-                    statusEl.innerText = "Your Turn (Black)";
-                } else {
-                    isGameOver = true;
-                    statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
-                }
-                drawBoard(); isPlayerTurn = true;
+            consecutivePasses = 0;
+            moveHistory.push(coord);
+            drawBoard();
+            isPlayerTurn = false;
+            statusEl.innerText = "KataGo is thinking...";
+
+            const data = await fetchMove();
+            const move = data.ai_move.toUpperCase();
+
+            if (move === "RESIGN") { endGame(data.score); return; }
+
+            if (move === "PASS") {
+                consecutivePasses++;
+                moveHistory.push("PASS");
+                if (consecutivePasses >= 2) { endGame(data.score); return; }
+                statusEl.innerText = "KataGo passed. Your Turn (Black)";
+            } else {
+                consecutivePasses = 0;
+                applyAIMove(data.ai_move, 'white');
+                moveHistory.push(data.ai_move);
+                statusEl.innerText = "Your Turn (Black)";
             }
+
+            drawBoard();
+            isPlayerTurn = true;
         });
 
+        // ─────────────────────────────────────────────
+        // Reset
+        // ─────────────────────────────────────────────
+
         function resetGame() {
-            boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false;
-            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>"; statusEl.innerText = "Your Turn (Black)"; drawBoard();
+            boardState = {}; moveHistory = []; boardHistory = [];
+            consecutivePasses = 0; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false;
+            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+            passBtn.disabled = false;
+            statusEl.innerText = "Your Turn (Black)";
+            drawBoard();
         }
+
         drawBoard();
     </script>
 </body>
