@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  go-game:
+    image: ghcr.io/jeroneo/go_game_browser/katago-web:latest
+    container_name: katago-web
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
