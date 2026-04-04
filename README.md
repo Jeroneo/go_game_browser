@@ -37,7 +37,7 @@ The project is divided into three main components:
    version: '3.8'
    services:
      go-game:
-       image: ghcr.io/jeroneo/go_game_browser/katago-web:latest
+       image: ghcr.io/jeroneo/katago-web:latest
        container_name: katago-web
        ports:
          - "8000:8000"
