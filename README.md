@@ -1,26 +1,44 @@
 # Dockerized Go Game with KataGo AI
 
-A lightweight, browser-based Go game powered by the world-class **KataGo** engine. The entire application—frontend, backend, and AI engine—is containerized using Docker for a seamless setup.
+A lightweight, browser-based Go game powered by the world-class **KataGo** engine. The entire application—frontend, backend, and AI engine—is containerized using Docker for a seamless, one-command setup.
+
+---
 
 ## 🧠 How It Works
 
 The project is divided into three main components:
 
-1. **The Frontend (HTML5 Canvas & Vanilla JS):** A lightweight, zero-dependency web interface. It draws the 19x19 Go board, captures user clicks, translates them into standard Go coordinates (e.g., "D4"), and sends the game history to the backend via a REST API.
+1. **The Frontend (HTML5 Canvas & Vanilla JS):** A lightweight, zero-dependency web interface styled after traditional Weiqi aesthetics. It draws the 19×19 Go board on an HTML5 Canvas, captures user clicks, translates them into standard GTP coordinates (e.g., `D4`), and sends the full game history to the backend via a REST API call.
 
-2. **The Backend (FastAPI / Python):** A fast, modern web server. It has two jobs: serving the static HTML frontend to the user's browser, and acting as a bridge between the web API and the KataGo engine.
+2. **The Backend (FastAPI / Python):** A fast, modern web server with two responsibilities: serving the static HTML frontend to the browser, and acting as a bridge between the `/api/move` REST endpoint and the KataGo engine process.
 
-3. **The AI Engine (KataGo):** A highly optimized, open-source neural network built specifically for Go. The Python backend runs the KataGo binary as a background subprocess and communicates with it using the **Go Text Protocol (GTP)**. When the backend receives a move history from the frontend, it syncs the board state with KataGo, asks it to generate a move based on the selected difficulty, and returns the result to the browser.
+3. **The AI Engine (KataGo):** A highly optimized, open-source neural network built specifically for Go. The Python backend runs the KataGo binary as a persistent background subprocess and communicates with it using the **Go Text Protocol (GTP)**. When the backend receives a move history, it replays the board state with `play` commands, then issues a `genmove` command to generate the next move at the requested difficulty, and returns the result to the browser.
+
+---
+
+## ✨ Features
+
+- **Play vs. AI:** Place black stones by clicking on the board. KataGo responds automatically as white.
+- **AI Self-Play (觀戰模式):** Toggle spectator mode to watch KataGo play against itself, with moves displayed every 600 ms.
+- **Difficulty Selection:** Three strength levels controlled by limiting KataGo's MCTS simulations (`maxVisits`):
+  - **Easy** — 10 visits
+  - **Medium** — 100 visits *(default)*
+  - **Hard** — 500 visits
+- **Locked Difficulty:** The selector locks once the first move is played and resets when starting a new game.
+
+---
 
 ## 🤔 Architectural Choices
 
-- **KataGo vs. Standard Hugging Face LLMs:** Initially, one might think to use a standard text-generation model (like GPT or Llama) for AI. However, standard LLMs do not inherently understand the complex spatial strategy of Go. KataGo utilizes Monte Carlo Tree Search (MCTS) combined with a specialized neural network, making it vastly superior and genuinely competitive.
+- **KataGo vs. Standard LLMs:** Standard text-generation models (GPT, Llama, etc.) do not inherently understand the spatial strategy of Go. KataGo combines Monte Carlo Tree Search (MCTS) with a specialized neural network trained exclusively on Go, making it vastly superior for this task.
 
-- **Docker Containerization & CI/CD:** Setting up KataGo manually requires downloading OS-specific binaries, fetching neural network weight files (`.bin.gz`), and configuring GTP settings. We use Docker to automate this. Furthermore, a GitHub Actions CI/CD pipeline automatically builds and pushes the Docker image to the GitHub Container Registry (GHCR) on every push to the `main` branch, meaning you don't even have to build the image locally.
+- **Docker & CI/CD:** Setting up KataGo manually requires OS-specific binaries, neural network weight files (`.bin.gz`), and custom GTP configuration. Docker automates all of this. A GitHub Actions CI/CD pipeline automatically builds and pushes the image to GHCR on every push to `main`, so no local build is required.
 
-- **FastAPI:** Chosen for its speed, simplicity, and built-in asynchronous capabilities. It effortlessly handles serving the static `index.html` while exposing the `/api/move` endpoint in a single, readable Python file.
+- **FastAPI:** Chosen for its speed, simplicity, and async support. A single Python file serves the static `index.html` and exposes the `/api/move` endpoint.
 
-- **Difficulty Scaling via "Visits":** Instead of swapping out entirely different models for difficulty levels, we control KataGo's strength by limiting its `maxVisits` (the number of MCTS simulations it is allowed to run before choosing a move). Less visits = faster, weaker AI; more visits = deeper thinking, stronger AI.
+- **Difficulty via `maxVisits`:** Rather than swapping models, KataGo's strength is tuned by capping the number of MCTS simulations per move. Fewer visits = faster, weaker play; more visits = deeper search, stronger play.
+
+---
 
 ## 🚀 How to Run It
 
@@ -31,35 +49,39 @@ The project is divided into three main components:
 
 ### Setup & Play
 
-1. **Create the Docker Compose file:** Create a file named `docker-compose.yml` anywhere on your machine and paste the following code:
+**1. Create the Docker Compose file**
 
-   ```yaml
-   version: '3.8'
-   services:
-     go-game:
-       image: ghcr.io/jeroneo/katago-web:latest
-       container_name: katago-web
-       ports:
-         - "8000:8000"
-       restart: unless-stopped
-   ```
+Create a file named `docker-compose.yml` anywhere on your machine and paste the following:
 
-2. **Start the container:** Open your terminal in the same directory as your `docker-compose.yml` file and run:
+```yaml
+version: '3.8'
+services:
+  go-game:
+    image: ghcr.io/jeroneo/katago-web:latest
+    container_name: katago-web
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+```
 
-   ```bash
-   docker-compose up -d
-   ```
+**2. Start the container**
 
-   > **Note:** Docker will pull the pre-built image directly from the GitHub Container Registry.
+```bash
+docker-compose up -d
+```
 
-3. **Play the game:** Open your web browser and navigate to:
+> Docker will pull the pre-built image directly from GHCR — no local build needed.
 
-   ```
-   http://localhost:8000
-   ```
+**3. Play the game**
 
-4. **Stop the server:** When you are done playing, spin down the container by running:
+Open your browser and navigate to `http://localhost:8000`.
 
-   ```bash
-   docker-compose down
-   ```
+**4. Stop the server**
+
+```bash
+docker-compose down
+```
+
+---
+
+*Jérôme DO ESPIRITO SANTO — Shanghai University, 2026*
