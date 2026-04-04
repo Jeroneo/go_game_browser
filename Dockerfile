@@ -16,8 +16,9 @@ RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/kata
     && chmod +x katago \
     && rm katago.zip
 
-# Download a fast 15-block neural network model for KataGo
-RUN wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b15c192-s1672170752-d466197061/network_file
+# Download a fast 15-block neural network model for KataGo (using curl and a User-Agent to bypass bot protection)
+RUN apt-get install -y curl && \
+    curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o model.bin.gz https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b15c192-s1672170752-d466197061.bin.gz
 
 # Create a basic GTP configuration for KataGo to restrict threads and logging
 RUN echo "logDir = gtp_logs\n\
