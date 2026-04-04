@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KataGo 圍棋 - Self Play</title>
+    <title>KataGo 圍棋</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2235%22 cy=%2240%22 r=%2230%22 fill=%22black%22 stroke=%22%23333%22 stroke-width=%222%22/><circle cx=%2265%22 cy=%2260%22 r=%2230%22 fill=%22%23fdf5e6%22 stroke=%22%23ccc%22 stroke-width=%222%22/></svg>">
     
     <style>
@@ -80,6 +80,13 @@
             border: 1px solid var(--gold-accent);
             padding: 8px;
             font-family: inherit;
+            transition: opacity 0.3s ease;
+        }
+
+        select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: rgba(197, 160, 89, 0.2);
         }
 
         button {
@@ -99,7 +106,6 @@
             color: var(--paper-ivory);
         }
 
-        /* Distinct style for Self-Play button */
         .btn-self-play {
             color: var(--gold-accent);
             border-color: var(--gold-accent);
@@ -147,6 +153,7 @@
             </div>
 
             <div class="controls">
+                <label style="font-size: 0.8rem; color: var(--gold-accent); margin-bottom: -10px;">AI STRENGTH</label>
                 <select id="difficulty">
                     <option value="easy">Easy (10 Visits)</option>
                     <option value="medium" selected>Medium (100 Visits)</option>
@@ -179,6 +186,7 @@
         const ctx = canvas.getContext('2d');
         const statusEl = document.getElementById('status');
         const selfPlayBtn = document.getElementById('selfPlayBtn');
+        const diffSelect = document.getElementById('difficulty');
         
         const boardSize = 19;
         const cellSize = canvas.width / (boardSize + 1);
@@ -188,6 +196,11 @@
         let moveHistory = [];
         let isPlayerTurn = true;
         let isSelfPlayActive = false;
+
+        function updateDifficultyState() {
+            // Difficulty is locked if any moves have been made
+            diffSelect.disabled = (moveHistory.length > 0);
+        }
 
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -209,6 +222,7 @@
             }));
 
             Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
+            updateDifficultyState();
         }
 
         function drawStone(coord, color) {
@@ -236,7 +250,7 @@
         }
 
         async function fetchAIMove() {
-            const difficulty = document.getElementById('difficulty').value;
+            const difficulty = diffSelect.value;
             try {
                 const response = await fetch('/api/move', {
                     method: 'POST',
@@ -253,24 +267,18 @@
 
         async function runSelfPlay() {
             if (!isSelfPlayActive) return;
-
             const turnColor = moveHistory.length % 2 === 0 ? "Black" : "White";
             statusEl.innerText = `AI Thinking (${turnColor})...`;
-            
             const aiMove = await fetchAIMove();
-
             if (aiMove.toUpperCase() === "PASS" || aiMove.toUpperCase() === "RESIGN") {
                 statusEl.innerText = `Game Over - AI ${aiMove.toUpperCase()}`;
                 isSelfPlayActive = false;
                 selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 return;
             }
-
             boardState[aiMove] = turnColor.toLowerCase();
             moveHistory.push(aiMove);
             drawBoard();
-
-            // Small delay so humans can follow the game
             setTimeout(runSelfPlay, 600);
         }
 
@@ -316,7 +324,7 @@
             boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             statusEl.innerText = "Your Turn (Black)";
-            drawBoard();
+            drawBoard(); // This will trigger updateDifficultyState() and enable the selector
         }
 
         drawBoard();
