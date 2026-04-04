@@ -26,10 +26,10 @@ RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/kata
     && chmod +x katago \
     && rm katago.zip
 
-# 4. Download a fast 15-block neural network model for KataGo
-RUN curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o model.bin.gz https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b15c192-s1672170752-d466197061.bin.gz
+# 4. Download an official 20-block network directly from GitHub Releases (bypasses Cloudflare)
+RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.4.5/g170e-b20c256x2-s5303129600-d1228401921.bin.gz -O model.bin.gz
 
-# 5. Create a basic GTP configuration for KataGo (Added ponderingEnabled)
+# 5. Create a basic GTP configuration for KataGo
 RUN echo "logAllGTPCommunication = false\n\
 logSearchInfo = false\n\
 numSearchThreads = 4\n\
