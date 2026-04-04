@@ -21,8 +21,7 @@ katago_process = subprocess.Popen(
 time.sleep(2)
 
 def send_gtp_command(command: str) -> str:
-    if katago_process.poll() is not None:
-        return "PASS"
+    if katago_process.poll() is not None: return "PASS"
     katago_process.stdin.write(command + "\n")
     katago_process.stdin.flush()
     response = ""
@@ -36,37 +35,29 @@ def send_gtp_command(command: str) -> str:
     return response[1:].strip() if response.startswith("=") else ""
 
 def get_current_stones():
-    """Parses the board from KataGo to handle captures correctly."""
+    """Asks KataGo for the board state and captures/removals."""
     board_raw = send_gtp_command("showboard")
     stones = {}
-    # Regex to find stone positions in KataGo's ASCII output
-    # Looks for lines like "19 . . . X O . . ."
     lines = board_raw.split('\n')
     columns = "ABCDEFGHJKLMNOPQRST"
     
-    row_num = 19
     for line in lines:
+        # Match lines starting with a row number, e.g., "19 . . X O ..."
         match = re.search(r'^\s*(\d+)\s+(.+)', line)
         if match:
-            current_row = int(match.group(1))
-            # Get the grid part and remove spaces
-            grid_parts = match.group(2).strip().split(' ')
-            grid_parts = [p for p in grid_parts if p in ['.', 'X', 'O', '@', '#']]
-            
-            for col_idx, char in enumerate(grid_parts):
+            row = int(match.group(1))
+            # Clean the row to get only symbols
+            symbols = match.group(2).split()
+            for col_idx, char in enumerate(symbols):
                 if col_idx < 19:
-                    coord = f"{columns[col_idx]}{current_row}"
-                    if char in ['X', '@']: # Black stone
-                        stones[coord] = 'black'
-                    elif char in ['O', '#']: # White stone
-                        stones[coord] = 'white'
-            row_num -= 1
+                    coord = f"{columns[col_idx]}{row}"
+                    if char in ['X', '@']: stones[coord] = 'black'
+                    elif char in ['O', '#']: stones[coord] = 'white'
     return stones
 
 class GameState(BaseModel):
     history: list[str]
     difficulty: str
-    board_size: int = 19
 
 @app.get("/")
 async def serve_frontend():
@@ -74,34 +65,28 @@ async def serve_frontend():
 
 @app.post("/api/move")
 async def play_move(state: GameState):
-    visits_map = {"easy": 10, "medium": 100, "hard": 500}
-    max_visits = visits_map.get(state.difficulty, 100)
-
+    visits = {"easy": 10, "medium": 100, "hard": 500}.get(state.difficulty, 100)
     try:
         send_gtp_command("clear_board")
-        send_gtp_command(f"boardsize {state.board_size}")
-        try:
-            send_gtp_command(f"kata-set-param maxVisits {max_visits}")
+        send_gtp_command("boardsize 19")
+        try: send_gtp_command(f"kata-set-param maxVisits {visits}")
         except: pass
 
-        colors = ["black", "white"]
         for idx, move in enumerate(state.history):
-            send_gtp_command(f"play {colors[idx % 2]} {move}")
+            color = "black" if idx % 2 == 0 else "white"
+            send_gtp_command(f"play {color} {move}")
 
-        ai_color = colors[len(state.history) % 2]
+        ai_color = "black" if len(state.history) % 2 == 0 else "white"
         ai_move = send_gtp_command(f"genmove {ai_color}")
         
-        # Sync the board stones (handles captures)
-        current_stones = get_current_stones()
+        # Get the official board state (after captures)
+        stones = get_current_stones()
         
         score = None
-        if "PASS" in ai_move.upper() or "RESIGN" in ai_move.upper():
+        if ai_move.upper() in ["PASS", "RESIGN"]:
             score = send_gtp_command("final_score")
-            if not score or score == "PASS":
-                score = send_gtp_command("kata-compute-score")
+            if not score or "PASS" in score: score = send_gtp_command("kata-compute-score")
 
-        return {"ai_move": ai_move, "stones": current_stones, "score": score}
-
+        return {"ai_move": ai_move, "stones": stones, "score": score}
     except Exception as e:
-        print(f"Error: {e}")
-        return {"ai_move": "PASS", "stones": {}, "score": "0"}
+        return {"ai_move": "PASS", "stones": {}, "score": "Error"}
