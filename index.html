@@ -451,6 +451,14 @@
             consecutivePasses++;
             moveHistory.push("PASS");
 
+            // If the player's pass is the second consecutive pass, end immediately
+            // without hitting the backend — the game is already decided.
+            if (consecutivePasses >= 2) {
+                const data = await fetchMove(); // fetch final_score from backend
+                endGame(data.score);
+                return;
+            }
+
             statusEl.innerText = "You passed. KataGo is thinking...";
             const data = await fetchMove();
             const move = data.ai_move.toUpperCase();
