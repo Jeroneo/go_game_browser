@@ -29,10 +29,11 @@ RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/kata
 # 4. Download a fast 15-block neural network model for KataGo
 RUN curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o model.bin.gz https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b15c192-s1672170752-d466197061.bin.gz
 
-# 5. Create a basic GTP configuration for KataGo (Removed the conflicting "rules" line)
+# 5. Create a basic GTP configuration for KataGo (Added ponderingEnabled)
 RUN echo "logAllGTPCommunication = false\n\
 logSearchInfo = false\n\
 numSearchThreads = 4\n\
+ponderingEnabled = false\n\
 koRule = SIMPLE\n\
 scoringRule = AREA\n\
 taxRule = NONE\n\
