@@ -242,10 +242,17 @@
 
         // Formats GTP score (B+7.5) to human-readable (Black wins by 7.5)
         function formatScore(s) {
-            if (!s) return "Result Pending";
-            if (s.includes("R")) return "Win by Resignation (中盤勝)";
+            if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
+            
+            // Handle Resignation (B+R or W+R)
+            if (s.includes("R")) {
+                return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
+            }
+            
+            // Handle Normal Score (B+12.5)
             const winner = s.startsWith("B") ? "Black (黑勝)" : "White (白勝)";
-            return `${winner} +${s.substring(2)} points`;
+            const points = s.includes("+") ? s.split("+")[1] : s;
+            return `${winner} +${points} pts`;
         }
 
         async function fetchMove() {

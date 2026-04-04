@@ -71,33 +71,42 @@ async def serve_frontend():
 
 @app.post("/api/move")
 async def play_move(state: GameState):
-    visits_map = {
-        "easy": 10,     
-        "medium": 100,  
-        "hard": 500    
-    }
+    visits_map = {"easy": 10, "medium": 100, "hard": 500}
     max_visits = visits_map.get(state.difficulty, 100)
 
     try:
         send_gtp_command("clear_board")
         send_gtp_command(f"boardsize {state.board_size}")
-        send_gtp_command("clear_board")
-        
         try:
             send_gtp_command(f"kata-set-param maxVisits {max_visits}")
-        except Exception as e:
-            pass
+        except: pass
 
         colors = ["black", "white"]
         for idx, move in enumerate(state.history):
-            color = colors[idx % 2]
-            send_gtp_command(f"play {color} {move}")
+            send_gtp_command(f"play {colors[idx % 2]} {move}")
 
         ai_color = colors[len(state.history) % 2]
         ai_move = send_gtp_command(f"genmove {ai_color}")
+        
+        score = None
+        # Handle Resignation immediately
+        if "RESIGN" in ai_move.upper():
+            # If current AI resigns, the OTHER color wins
+            winner = "W" if ai_color == "black" else "B"
+            score = f"{winner}+R"
+        # Handle Pass
+        elif "PASS" in ai_move.upper():
+            # Force KataGo to estimate the final score
+            score = send_gtp_command("final_score")
+            # If final_score failed (returned 'PASS' fallback), use estimated lead
+            if score == "PASS":
+                score = send_gtp_command("kata-compute-score")
 
-        return {"ai_move": ai_move}
+        return {"ai_move": ai_move, "score": score}
 
+    except Exception as e:
+        print(f"Backend Error: {e}")
+        return {"ai_move": "PASS", "score": "B+0.5"}
     except Exception as e:
         print(f"Backend Game Error: {e}")
         return {"ai_move": "PASS"}
