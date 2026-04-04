@@ -35,24 +35,19 @@ def send_gtp_command(command: str) -> str:
     return response[1:].strip() if response.startswith("=") else ""
 
 def get_current_stones():
-    """Asks KataGo for the board state and captures/removals."""
-    board_raw = send_gtp_command("showboard")
+    """Uses GTP list_stones command for 100% reliability."""
     stones = {}
-    lines = board_raw.split('\n')
-    columns = "ABCDEFGHJKLMNOPQRST"
     
-    for line in lines:
-        # Match lines starting with a row number, e.g., "19 . . X O ..."
-        match = re.search(r'^\s*(\d+)\s+(.+)', line)
-        if match:
-            row = int(match.group(1))
-            # Clean the row to get only symbols
-            symbols = match.group(2).split()
-            for col_idx, char in enumerate(symbols):
-                if col_idx < 19:
-                    coord = f"{columns[col_idx]}{row}"
-                    if char in ['X', '@']: stones[coord] = 'black'
-                    elif char in ['O', '#']: stones[coord] = 'white'
+    # Get all black stones
+    black_coords = send_gtp_command("list_stones black").split()
+    for coord in black_coords:
+        if coord: stones[coord] = 'black'
+        
+    # Get all white stones
+    white_coords = send_gtp_command("list_stones white").split()
+    for coord in white_coords:
+        if coord: stones[coord] = 'white'
+        
     return stones
 
 class GameState(BaseModel):
@@ -67,19 +62,20 @@ async def serve_frontend():
 async def play_move(state: GameState):
     visits = {"easy": 10, "medium": 100, "hard": 500}.get(state.difficulty, 100)
     try:
+        # Reset engine and replay history to reach current state
         send_gtp_command("clear_board")
         send_gtp_command("boardsize 19")
-        try: send_gtp_command(f"kata-set-param maxVisits {visits}")
-        except: pass
+        send_gtp_command(f"kata-set-param maxVisits {visits}")
 
         for idx, move in enumerate(state.history):
             color = "black" if idx % 2 == 0 else "white"
             send_gtp_command(f"play {color} {move}")
 
+        # Get current AI's move
         ai_color = "black" if len(state.history) % 2 == 0 else "white"
         ai_move = send_gtp_command(f"genmove {ai_color}")
         
-        # Get the official board state (after captures)
+        # Capture check: Get the official board state AFTER the AI move
         stones = get_current_stones()
         
         score = None
@@ -89,4 +85,5 @@ async def play_move(state: GameState):
 
         return {"ai_move": ai_move, "stones": stones, "score": score}
     except Exception as e:
+        print(f"Error: {e}")
         return {"ai_move": "PASS", "stones": {}, "score": "Error"}
