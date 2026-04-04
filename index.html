@@ -260,10 +260,15 @@
                 const res = await fetch('/api/move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value, board_size: boardSize })
+                    body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value })
                 });
-                return await res.json();
-            } catch (e) { return { ai_move: "PASS", score: "Error" }; }
+                const data = await res.json();
+                
+                // This line is the fix: It syncs the board and removes captured stones
+                boardState = data.stones; 
+                
+                return data;
+            } catch (e) { return { ai_move: "PASS", stones: boardState }; }
         }
 
         async function runSelfPlay() {
@@ -276,7 +281,7 @@
                 isSelfPlayActive = false; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 return;
             }
-            boardState[data.ai_move] = turn.toLowerCase(); moveHistory.push(data.ai_move);
+            moveHistory.push(data.ai_move);
             drawBoard(); setTimeout(runSelfPlay, 600);
         }
 
@@ -293,11 +298,11 @@
             const coord = getGoCoord(x, y);
 
             if (coord && !boardState[coord]) {
-                boardState[coord] = 'black'; moveHistory.push(coord); drawBoard(); isPlayerTurn = false;
+                moveHistory.push(coord); drawBoard(); isPlayerTurn = false;
                 statusEl.innerText = "KataGo is thinking...";
                 const data = await fetchMove();
                 if (data.ai_move.toUpperCase() !== "PASS" && data.ai_move.toUpperCase() !== "RESIGN") {
-                    boardState[data.ai_move] = 'white'; moveHistory.push(data.ai_move);
+                    moveHistory.push(data.ai_move);
                     statusEl.innerText = "Your Turn (Black)";
                 } else {
                     statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
