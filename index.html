@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KataGo 圍棋</title>
+    <title>KataGo 圍棋 - Self Play</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2235%22 cy=%2240%22 r=%2230%22 fill=%22black%22 stroke=%22%23333%22 stroke-width=%222%22/><circle cx=%2265%22 cy=%2260%22 r=%2230%22 fill=%22%23fdf5e6%22 stroke=%22%23ccc%22 stroke-width=%222%22/></svg>">
     
     <style>
@@ -12,23 +12,18 @@
             --paper-ivory: #e8dcc4;
             --gold-accent: #c5a059;
             --red-seal: #9e2a2b;
-            --red-seal-hover: #7b1e1f;
             --wood-board: #dcb35c;
             --wood-dark: #2a1c15;
             --wood-border: #4a3018;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
-        /* Lock screen size to prevent scrolling */
         body {
             font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
             background: radial-gradient(circle at center, #241a14 0%, var(--bg-ink) 100%);
             color: var(--paper-ivory);
             margin: 0;
-            padding: 0;
             height: 100vh;
             width: 100vw;
             overflow: hidden; 
@@ -37,7 +32,6 @@
             align-items: center;
         }
 
-        /* Two-column horizontal layout */
         .layout-container {
             display: flex;
             flex-direction: row;
@@ -49,210 +43,122 @@
             padding: 20px;
         }
 
-        /* Left side: UI and Controls */
         .left-panel {
             display: flex;
             flex-direction: column;
             justify-content: center;
             width: 320px;
-            position: relative;
-        }
-
-        /* Decorative background kanji */
-        .watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 12rem;
-            color: rgba(197, 160, 89, 0.03);
-            writing-mode: vertical-rl;
-            z-index: 0;
-            pointer-events: none;
-            font-family: "MingLiU", "SimSun", serif;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 40px;
-            z-index: 1;
+            margin-bottom: 30px;
             border-bottom: 1px solid rgba(197, 160, 89, 0.3);
-            padding-bottom: 20px;
+            padding-bottom: 15px;
         }
 
         .header h1 {
             margin: 0;
-            font-size: 3rem;
-            font-weight: normal;
+            font-size: 2.8rem;
             color: var(--gold-accent);
             letter-spacing: 2px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        }
-
-        .header p {
-            margin: 10px 0 0 0;
-            color: var(--paper-ivory);
-            font-size: 1.1rem;
-            letter-spacing: 4px;
-            opacity: 0.8;
-            text-transform: uppercase;
         }
 
         .controls {
             background: rgba(42, 28, 21, 0.6);
             border: 1px solid rgba(197, 160, 89, 0.2);
-            padding: 30px 25px;
+            padding: 25px;
             border-radius: 4px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-            z-index: 1;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-        }
-
-        label {
-            font-size: 0.95rem;
-            color: var(--gold-accent);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: -10px;
-            display: block;
+            gap: 15px;
         }
 
         select {
             background-color: var(--wood-dark);
             color: var(--paper-ivory);
             border: 1px solid var(--gold-accent);
-            padding: 10px 12px;
+            padding: 8px;
             font-family: inherit;
-            font-size: 1rem;
-            outline: none;
-            cursor: pointer;
-            width: 100%;
         }
 
-        /* Traditional Red Stamp Button */
         button {
             background-color: transparent;
             color: var(--red-seal);
             border: 2px solid var(--red-seal);
-            padding: 12px;
+            padding: 10px;
             font-family: "MingLiU", "SimSun", serif;
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
-            margin-top: 10px;
-            letter-spacing: 2px;
-            text-align: center;
-            line-height: 1.2;
-        }
-
-        button span.en-text {
-            display: block;
-            font-family: "Palatino Linotype", serif;
-            font-size: 0.85rem;
-            letter-spacing: 1px;
-            font-weight: normal;
-            margin-top: 4px;
         }
 
         button:hover {
             background-color: var(--red-seal);
             color: var(--paper-ivory);
-            box-shadow: 0 0 15px rgba(158, 42, 43, 0.4);
+        }
+
+        /* Distinct style for Self-Play button */
+        .btn-self-play {
+            color: var(--gold-accent);
+            border-color: var(--gold-accent);
+        }
+
+        .btn-self-play:hover {
+            background-color: var(--gold-accent);
+            color: var(--bg-ink);
         }
 
         .status-box {
-            margin-top: 30px;
-            padding: 15px 20px;
+            margin-top: 20px;
+            padding: 15px;
             border-left: 3px solid var(--gold-accent);
             background: rgba(0,0,0,0.4);
-            z-index: 1;
         }
-
-        #status {
-            font-size: 1.15rem;
-            letter-spacing: 0.5px;
-            transition: all 0.3s;
-        }
-
-        .status-thinking { color: var(--gold-accent); }
-        .status-turn { color: var(--paper-ivory); }
-        .status-error { color: var(--red-seal); }
-        .status-win { color: #55a630; }
 
         .credits {
-            margin-top: 50px;
+            margin-top: 30px;
             text-align: center;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: rgba(232, 220, 196, 0.4);
-            letter-spacing: 1px;
-            z-index: 1;
-            line-height: 1.6;
-        }
-
-        /* Right side: The Go Board */
-        .right-panel {
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
 
         .board-wrapper {
-            position: relative;
-            padding: 15px;
             background: var(--wood-board);
             border: 12px solid var(--wood-border);
-            border-radius: 4px;
-            box-shadow: 
-                15px 15px 40px rgba(0,0,0,0.8),
-                inset 0 0 40px rgba(139, 69, 19, 0.4);
+            box-shadow: 15px 15px 40px rgba(0,0,0,0.8);
         }
 
         canvas {
             display: block;
-            cursor: crosshair;
-            /* Max height constraints to ensure it never overflows the 100vh body */
             max-width: 80vh;
             max-height: 80vh;
-        }
-
-        /* Fallback for smaller screens to re-enable scrolling if necessary */
-        @media (max-width: 1000px) {
-            body { overflow-y: auto; height: auto; padding: 40px 10px; }
-            .layout-container { flex-direction: column; gap: 40px; }
         }
     </style>
 </head>
 <body>
 
     <div class="layout-container">
-        
         <div class="left-panel">
-            <div class="watermark">圍棋</div>
-            
             <div class="header">
                 <h1>KataGo</h1>
                 <p>Traditional Weiqi</p>
             </div>
 
             <div class="controls">
-                <label for="difficulty">AI Strength</label>
                 <select id="difficulty">
                     <option value="easy">Easy (10 Visits)</option>
                     <option value="medium" selected>Medium (100 Visits)</option>
                     <option value="hard">Hard (500 Visits)</option>
                 </select>
 
-                <button onclick="resetGame()">
-                    重新開始
-                    <span class="en-text">Resign / New Game</span>
-                </button>
+                <button onclick="resetGame()">重新開始<br><small>New Game</small></button>
+                <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<br><small>AI Self-Play</small></button>
             </div>
             
             <div class="status-box">
-                <div id="status" class="status-turn">Your Turn (Black)</div>
+                <div id="status">Your Turn (Black)</div>
             </div>
 
             <div class="credits">
@@ -266,13 +172,13 @@
                 <canvas id="goBoard" width="650" height="650"></canvas>
             </div>
         </div>
-
     </div>
 
     <script>
         const canvas = document.getElementById('goBoard');
         const ctx = canvas.getContext('2d');
         const statusEl = document.getElementById('status');
+        const selfPlayBtn = document.getElementById('selfPlayBtn');
         
         const boardSize = 19;
         const cellSize = canvas.width / (boardSize + 1);
@@ -281,15 +187,13 @@
         let boardState = {}; 
         let moveHistory = [];
         let isPlayerTurn = true;
+        let isSelfPlayActive = false;
 
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw Grid Lines (Dark Ink Color)
             ctx.beginPath();
             ctx.strokeStyle = '#1a110a';
             ctx.lineWidth = 1.2;
-            
             for (let i = 1; i <= boardSize; i++) {
                 ctx.moveTo(i * cellSize, cellSize);
                 ctx.lineTo(i * cellSize, canvas.height - cellSize);
@@ -298,96 +202,96 @@
             }
             ctx.stroke();
 
-            // Draw Hoshi (Star Points)
             const hoshiPoints = [4, 10, 16];
             ctx.fillStyle = '#1a110a';
-            for (let x of hoshiPoints) {
-                for (let y of hoshiPoints) {
-                    ctx.beginPath();
-                    ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI);
-                    ctx.fill();
-                }
-            }
+            hoshiPoints.forEach(x => hoshiPoints.forEach(y => {
+                ctx.beginPath(); ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI); ctx.fill();
+            }));
 
-            for (const [coord, color] of Object.entries(boardState)) {
-                drawStone(coord, color);
-            }
+            Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
+        }
+
+        function drawStone(coord, color) {
+            const pos = getPixels(coord);
+            const radius = cellSize * 0.48;
+            ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI); ctx.shadowColor = 'transparent';
+            const grad = ctx.createRadialGradient(pos.x-radius*0.3, pos.y-radius*0.3, radius*0.1, pos.x, pos.y, radius);
+            if (color === 'black') { grad.addColorStop(0, '#3a3a3a'); grad.addColorStop(1, '#000'); }
+            else { grad.addColorStop(0, '#fff'); grad.addColorStop(1, '#c2b6a3'); }
+            ctx.fillStyle = grad; ctx.fill();
+        }
+
+        function getPixels(coord) {
+            const col = columns.indexOf(coord[0]);
+            const gtpRow = parseInt(coord.substring(1));
+            return { x: (col + 1) * cellSize, y: (boardSize - gtpRow + 1) * cellSize };
         }
 
         function getGoCoord(x, y) {
             const colIdx = Math.round(x / cellSize) - 1;
             const row = Math.round(y / cellSize);
             const gtpRow = boardSize - row + 1;
-            
-            if (colIdx >= 0 && colIdx < boardSize && row >= 1 && row <= boardSize) {
-                return columns[colIdx] + gtpRow;
+            return (colIdx >= 0 && colIdx < boardSize && row >= 1 && row <= boardSize) ? columns[colIdx] + gtpRow : null;
+        }
+
+        async function fetchAIMove() {
+            const difficulty = document.getElementById('difficulty').value;
+            try {
+                const response = await fetch('/api/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: moveHistory, difficulty, board_size: boardSize })
+                });
+                const data = await response.json();
+                return data.ai_move;
+            } catch (error) {
+                console.error("API Error:", error);
+                return "PASS";
             }
-            return null;
         }
 
-        function getPixels(coord) {
-            const col = columns.indexOf(coord[0]);
-            const gtpRow = parseInt(coord.substring(1));
-            const row = boardSize - gtpRow + 1;
+        async function runSelfPlay() {
+            if (!isSelfPlayActive) return;
+
+            const turnColor = moveHistory.length % 2 === 0 ? "Black" : "White";
+            statusEl.innerText = `AI Thinking (${turnColor})...`;
             
-            return {
-                x: (col + 1) * cellSize,
-                y: row * cellSize
-            };
+            const aiMove = await fetchAIMove();
+
+            if (aiMove.toUpperCase() === "PASS" || aiMove.toUpperCase() === "RESIGN") {
+                statusEl.innerText = `Game Over - AI ${aiMove.toUpperCase()}`;
+                isSelfPlayActive = false;
+                selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+                return;
+            }
+
+            boardState[aiMove] = turnColor.toLowerCase();
+            moveHistory.push(aiMove);
+            drawBoard();
+
+            // Small delay so humans can follow the game
+            setTimeout(runSelfPlay, 600);
         }
 
-        function drawStone(coord, color) {
-            const pos = getPixels(coord);
-            const radius = cellSize * 0.48; 
-            
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 4;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
-
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
-            ctx.shadowColor = 'transparent';
-
-            const gradient = ctx.createRadialGradient(
-                pos.x - radius * 0.3, pos.y - radius * 0.3, radius * 0.1,
-                pos.x, pos.y, radius
-            );
-
-            // Styling colors to mimic Yunzi stones
-            if (color === 'black') {
-                gradient.addColorStop(0, '#3a3a3a');
-                gradient.addColorStop(0.3, '#111');
-                gradient.addColorStop(1, '#000');
+        function toggleSelfPlay() {
+            isSelfPlayActive = !isSelfPlayActive;
+            if (isSelfPlayActive) {
+                selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>";
+                isPlayerTurn = false;
+                runSelfPlay();
             } else {
-                gradient.addColorStop(0, '#fff');
-                gradient.addColorStop(0.6, '#f4ebd8'); // slightly ivory
-                gradient.addColorStop(1, '#c2b6a3');
+                selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+                isPlayerTurn = true;
+                statusEl.innerText = "Paused. Your Turn.";
             }
-
-            ctx.fillStyle = gradient;
-            ctx.fill();
-        }
-
-        function setStatus(text, state) {
-            statusEl.innerText = text;
-            statusEl.className = '';
-            if (state === 'thinking') statusEl.classList.add('status-thinking');
-            else if (state === 'turn') statusEl.classList.add('status-turn');
-            else if (state === 'error') statusEl.classList.add('status-error');
-            else if (state === 'win') statusEl.classList.add('status-win');
         }
 
         canvas.addEventListener('click', async (e) => {
-            if (!isPlayerTurn) return;
-
-            // Compute correct click coordinates even if CSS resized the canvas
+            if (!isPlayerTurn || isSelfPlayActive) return;
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
-            
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
             const coord = getGoCoord(x, y);
 
             if (coord && !boardState[coord]) {
@@ -395,56 +299,26 @@
                 moveHistory.push(coord);
                 drawBoard();
                 isPlayerTurn = false;
-                setStatus("KataGo is thinking...", "thinking");
-
-                await fetchAIMove();
-            }
-        });
-
-        async function fetchAIMove() {
-            const difficulty = document.getElementById('difficulty').value;
-            
-            try {
-                const response = await fetch('/api/move', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        history: moveHistory,
-                        difficulty: difficulty,
-                        board_size: boardSize
-                    })
-                });
-
-                const data = await response.json();
-                const aiMove = data.ai_move;
-
+                statusEl.innerText = "KataGo is thinking...";
+                
+                const aiMove = await fetchAIMove();
                 if (aiMove.toUpperCase() !== "PASS" && aiMove.toUpperCase() !== "RESIGN") {
                     boardState[aiMove] = 'white';
                     moveHistory.push(aiMove);
-                    setStatus("Your Turn (Black)", "turn");
-                } else {
-                    setStatus(`Game Over - AI ${aiMove.toUpperCase()}`, "win");
                 }
-
                 drawBoard();
                 isPlayerTurn = true;
-
-            } catch (error) {
-                console.error("API Error:", error);
-                setStatus("Error reaching AI.", "error");
-                isPlayerTurn = true;
+                statusEl.innerText = "Your Turn (Black)";
             }
-        }
+        });
 
         function resetGame() {
-            boardState = {};
-            moveHistory = [];
-            isPlayerTurn = true;
-            setStatus("Your Turn (Black)", "turn");
+            boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false;
+            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+            statusEl.innerText = "Your Turn (Black)";
             drawBoard();
         }
 
-        // Init
         drawBoard();
     </script>
 </body>
