@@ -6,7 +6,7 @@ A lightweight, browser-based Go game powered by the world-class **KataGo** engin
 
 The project is divided into three main components:
 
-1. **The Frontend (HTML5 Canvas & Vanilla JS):** A lightweight, zero-dependency web interface. It draws the 9x9 Go board, captures user clicks, translates them into standard Go coordinates (e.g., "D4"), and sends the game history to the backend via a REST API.
+1. **The Frontend (HTML5 Canvas & Vanilla JS):** A lightweight, zero-dependency web interface. It draws the 19x19 Go board, captures user clicks, translates them into standard Go coordinates (e.g., "D4"), and sends the game history to the backend via a REST API.
 
 2. **The Backend (FastAPI / Python):** A fast, modern web server. It has two jobs: serving the static HTML frontend to the user's browser, and acting as a bridge between the web API and the KataGo engine.
 
@@ -31,7 +31,7 @@ The project is divided into three main components:
 
 ### Setup & Play
 
-1. **Create the Docker Compose file:** Create a file named `docker-compose.yml` anywhere on your machine and paste the following code. Make sure to replace `<your-github-username>` and `<your-repo-name>` with your actual GitHub details:
+1. **Create the Docker Compose file:** Create a file named `docker-compose.yml` anywhere on your machine and paste the following code:
 
    ```yaml
    version: '3.8'
