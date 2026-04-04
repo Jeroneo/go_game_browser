@@ -197,7 +197,7 @@
         const statusEl = document.getElementById('status'), selfPlayBtn = document.getElementById('selfPlayBtn'), diffSelect = document.getElementById('difficulty');
         
         const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST"; 
-        let boardState = {}, moveHistory = [], isPlayerTurn = true, isSelfPlayActive = false;
+        let boardState = {}, moveHistory = [], isPlayerTurn = true, isSelfPlayActive = false, isGameOver = false;
 
         // ─────────────────────────────────────────────
         // Go capture logic
@@ -349,7 +349,7 @@
             const data = await fetchMove();
             if (data.ai_move.toUpperCase() === "PASS" || data.ai_move.toUpperCase() === "RESIGN") {
                 statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
-                isSelfPlayActive = false; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+                isSelfPlayActive = false; isGameOver = true; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 return;
             }
             boardState[data.ai_move] = turn;
@@ -365,7 +365,7 @@
         }
 
         canvas.addEventListener('click', async (e) => {
-            if (!isPlayerTurn || isSelfPlayActive) return;
+            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) * (canvas.width / rect.width), y = (e.clientY - rect.top) * (canvas.height / rect.height);
             const coord = getGoCoord(x, y);
@@ -387,6 +387,7 @@
                     moveHistory.push(data.ai_move);
                     statusEl.innerText = "Your Turn (Black)";
                 } else {
+                    isGameOver = true;
                     statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
                 }
                 drawBoard(); isPlayerTurn = true;
@@ -394,7 +395,7 @@
         });
 
         function resetGame() {
-            boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false;
+            boardState = {}; moveHistory = []; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>"; statusEl.innerText = "Your Turn (Black)"; drawBoard();
         }
         drawBoard();
