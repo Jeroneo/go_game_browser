@@ -199,6 +199,78 @@
         const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST"; 
         let boardState = {}, moveHistory = [], isPlayerTurn = true, isSelfPlayActive = false;
 
+        // ─────────────────────────────────────────────
+        // Go capture logic
+        // ─────────────────────────────────────────────
+
+        /** Returns the up to 4 valid board neighbours of a GTP coordinate. */
+        function getNeighbors(coord) {
+            const col = columns.indexOf(coord[0]);
+            const row = parseInt(coord.substring(1));
+            const neighbors = [];
+            if (col > 0)           neighbors.push(columns[col - 1] + row);
+            if (col < boardSize - 1) neighbors.push(columns[col + 1] + row);
+            if (row > 1)           neighbors.push(coord[0] + (row - 1));
+            if (row < boardSize)   neighbors.push(coord[0] + (row + 1));
+            return neighbors;
+        }
+
+        /** Flood-fills all connected stones of the same colour starting from coord. */
+        function getGroup(coord, state) {
+            const color = state[coord];
+            const group = new Set();
+            const queue = [coord];
+            while (queue.length > 0) {
+                const c = queue.pop();
+                if (group.has(c)) continue;
+                group.add(c);
+                getNeighbors(c).forEach(n => {
+                    if (state[n] === color && !group.has(n)) queue.push(n);
+                });
+            }
+            return group;
+        }
+
+        /** Counts empty intersections adjacent to the group (its liberties). */
+        function getLiberties(group, state) {
+            const liberties = new Set();
+            group.forEach(coord => {
+                getNeighbors(coord).forEach(n => {
+                    if (!state[n]) liberties.add(n);
+                });
+            });
+            return liberties;
+        }
+
+        /**
+         * After placing a stone of `placedColor` at `placedCoord`,
+         * removes any opponent groups that now have zero liberties.
+         * Also removes the placed stone's own group if it has zero liberties (suicide).
+         */
+        function removeCaptures(placedCoord, placedColor, state) {
+            const opponentColor = placedColor === 'black' ? 'white' : 'black';
+
+            // Check every neighbouring opponent group for capture
+            getNeighbors(placedCoord).forEach(n => {
+                if (state[n] === opponentColor) {
+                    const group = getGroup(n, state);
+                    if (getLiberties(group, state).size === 0) {
+                        group.forEach(c => delete state[c]);
+                    }
+                }
+            });
+
+            // Suicide rule: remove own group if it has no liberties after captures
+            const ownGroup = getGroup(placedCoord, state);
+            if (getLiberties(ownGroup, state).size === 0) {
+                ownGroup.forEach(c => delete state[c]);
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // Drawing
+        // ─────────────────────────────────────────────
+
         function updateDifficultyState() { diffSelect.disabled = (moveHistory.length > 0); }
 
         function drawBoard() {
@@ -215,7 +287,7 @@
 
             if (moveHistory.length > 0) {
                 const last = moveHistory[moveHistory.length - 1];
-                if (last.toUpperCase() !== "PASS") {
+                if (last.toUpperCase() !== "PASS" && boardState[last]) {
                     const pos = getPixels(last);
                     ctx.beginPath(); ctx.strokeStyle = (boardState[last] === 'black') ? 'rgba(232, 220, 196, 0.8)' : 'rgba(0, 0, 0, 0.7)';
                     ctx.lineWidth = 2.5; ctx.arc(pos.x, pos.y, cellSize * 0.18, 0, 2 * Math.PI); ctx.stroke();
@@ -240,16 +312,15 @@
             return (col >= 0 && col < boardSize && row >= 1 && row <= boardSize) ? columns[col] + (boardSize - row + 1) : null;
         }
 
-        // Formats GTP score (B+7.5) to human-readable (Black wins by 7.5)
+        // ─────────────────────────────────────────────
+        // Helpers
+        // ─────────────────────────────────────────────
+
         function formatScore(s) {
             if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
-            
-            // Handle Resignation (B+R or W+R)
             if (s.includes("R")) {
                 return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
             }
-            
-            // Handle Normal Score (B+12.5)
             const winner = s.startsWith("B") ? "Black (黑勝)" : "White (白勝)";
             const points = s.includes("+") ? s.split("+")[1] : s;
             return `${winner} +${points} pts`;
@@ -266,17 +337,24 @@
             } catch (e) { return { ai_move: "PASS", score: "Error" }; }
         }
 
+        // ─────────────────────────────────────────────
+        // Game flow
+        // ─────────────────────────────────────────────
+
         async function runSelfPlay() {
             if (!isSelfPlayActive) return;
-            const turn = moveHistory.length % 2 === 0 ? "Black" : "White";
-            statusEl.innerText = `Thinking (${turn})...`;
+            const turn = moveHistory.length % 2 === 0 ? "black" : "white";
+            const turnLabel = turn === "black" ? "Black" : "White";
+            statusEl.innerText = `Thinking (${turnLabel})...`;
             const data = await fetchMove();
             if (data.ai_move.toUpperCase() === "PASS" || data.ai_move.toUpperCase() === "RESIGN") {
                 statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
                 isSelfPlayActive = false; selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 return;
             }
-            boardState[data.ai_move] = turn.toLowerCase(); moveHistory.push(data.ai_move);
+            boardState[data.ai_move] = turn;
+            removeCaptures(data.ai_move, turn, boardState);
+            moveHistory.push(data.ai_move);
             drawBoard(); setTimeout(runSelfPlay, 600);
         }
 
@@ -293,11 +371,20 @@
             const coord = getGoCoord(x, y);
 
             if (coord && !boardState[coord]) {
-                boardState[coord] = 'black'; moveHistory.push(coord); drawBoard(); isPlayerTurn = false;
+                // Place player's black stone and resolve captures
+                boardState[coord] = 'black';
+                removeCaptures(coord, 'black', boardState);
+                moveHistory.push(coord);
+                drawBoard();
+                isPlayerTurn = false;
                 statusEl.innerText = "KataGo is thinking...";
+
                 const data = await fetchMove();
                 if (data.ai_move.toUpperCase() !== "PASS" && data.ai_move.toUpperCase() !== "RESIGN") {
-                    boardState[data.ai_move] = 'white'; moveHistory.push(data.ai_move);
+                    // Place KataGo's white stone and resolve captures
+                    boardState[data.ai_move] = 'white';
+                    removeCaptures(data.ai_move, 'white', boardState);
+                    moveHistory.push(data.ai_move);
                     statusEl.innerText = "Your Turn (Black)";
                 } else {
                     statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(data.score)}</span>`;
