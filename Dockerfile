@@ -30,11 +30,10 @@ RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/kata
 RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.4.5/g170e-b20c256x2-s5303129600-d1228401921.bin.gz -O model.bin.gz
 
 # 5. Create a basic GTP configuration for KataGo
-#    numSearchThreads = 0 → KataGo auto-detects available CPU cores at runtime,
-#    which is safer than hardcoding a value that may exceed the container's CPU limit.
+#    numSearchThreads = 4 → fixed thread count for predictable CPU usage.
 RUN echo "logAllGTPCommunication = false\n\
 logSearchInfo = false\n\
-numSearchThreads = 0\n\
+numSearchThreads = 4\n\
 ponderingEnabled = false\n\
 koRule = POSITIONAL\n\
 scoringRule = AREA\n\

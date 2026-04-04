@@ -129,7 +129,7 @@ async def play_move(state: GameState):
             # `final_score` can return "PASS" when territory is ambiguous;
             # fall back to KataGo's score estimation in that case.
             if not score or score.upper() == "PASS":
-                score = send_gtp_command("kata-estimate-score")
+                score = send_gtp_command("kata-compute-score")
 
         return {"ai_move": ai_move, "score": score}
 
