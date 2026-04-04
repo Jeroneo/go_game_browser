@@ -20,14 +20,26 @@ katago_process = subprocess.Popen(
     KATAGO_CMD,
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
-    stderr=subprocess.DEVNULL, # We drop stderr so the buffer doesn't fill up and freeze KataGo
+    stderr=subprocess.PIPE, # Capture errors so we can read them
     text=True,
     bufsize=1
 )
-time.sleep(2) # Give KataGo a moment to load the neural net into memory
+time.sleep(2) # Give KataGo a moment to load the neural net
+
+# CRASH CHECK: If KataGo died, grab the error log and print it
+if katago_process.poll() is not None:
+    error_output = katago_process.stderr.read()
+    print("========================================")
+    print("FATAL ERROR: KataGo crashed on startup!")
+    print(error_output)
+    print("========================================")
 
 def send_gtp_command(command: str) -> str:
     """Sends a command to KataGo and safely reads the standard GTP response."""
+    # Double check if the process died before sending
+    if katago_process.poll() is not None:
+        raise ValueError("KataGo engine is dead. Check Docker startup logs.")
+
     katago_process.stdin.write(command + "\n")
     katago_process.stdin.flush()
     
@@ -35,15 +47,14 @@ def send_gtp_command(command: str) -> str:
     while True:
         line = katago_process.stdout.readline()
         if line == "":
-            raise ValueError("KataGo engine stopped running.")
+            raise ValueError("KataGo engine stopped responding.")
         if line == "\n":
             if response != "":
-                break # A blank line signifies the end of the GTP response block
+                break 
             else:
-                continue # Ignore leading empty lines
+                continue 
         response += line
     
-    # GTP success responses start with '='. Errors start with '?'
     if response.startswith("="):
         return response[1:].strip()
     else:
@@ -68,24 +79,20 @@ async def play_move(state: GameState):
     max_visits = visits_map.get(state.difficulty, 100)
 
     try:
-        # 1. Clear the board BEFORE resizing, and once more after just to be safe
         send_gtp_command("clear_board")
         send_gtp_command(f"boardsize {state.board_size}")
         send_gtp_command("clear_board")
         
-        # 2. Try to set difficulty, but gracefully ignore if KataGo rejects runtime parameter changes
         try:
             send_gtp_command(f"kata-set-param maxVisits {max_visits}")
         except Exception as e:
-            print(f"Non-fatal warning: {e}")
+            pass
 
-        # 3. Replay history to sync the board
         colors = ["black", "white"]
         for idx, move in enumerate(state.history):
             color = colors[idx % 2]
             send_gtp_command(f"play {color} {move}")
 
-        # 4. Generate AI move
         ai_color = colors[len(state.history) % 2]
         ai_move = send_gtp_command(f"genmove {ai_color}")
 

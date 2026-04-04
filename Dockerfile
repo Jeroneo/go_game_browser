@@ -1,17 +1,18 @@
 FROM python:3.11-slim
 
-# 1. Install system dependencies
+# 1. Install system dependencies (ADDED libgomp1 for OpenMP CPU threading)
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     unzip \
     libzip-dev \
     zlib1g-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 2. Download KataGo (Eigen CPU version)
+# 2. Download KataGo (Eigen CPU version for linux-x64)
 RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/katago-v1.14.1-eigen-linux-x64.zip -O katago.zip \
     && unzip katago.zip \
     && chmod +x katago \
@@ -20,7 +21,7 @@ RUN wget -q https://github.com/lightvector/KataGo/releases/download/v1.14.1/kata
 # 3. Download a fast 15-block neural network model for KataGo
 RUN curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o model.bin.gz https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b15c192-s1672170752-d466197061.bin.gz
 
-# 4. Create a basic GTP configuration for KataGo (Removed log directory requirement)
+# 4. Create a basic GTP configuration for KataGo
 RUN echo "logSearchInfo = false\n\
 numSearchThreads = 4\n" > gtp_config.cfg
 
