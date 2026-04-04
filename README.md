@@ -8,7 +8,7 @@ A lightweight, browser-based Go game powered by the world-class **KataGo** engin
 
 The project is divided into three main components:
 
-1. **The Frontend (HTML5 Canvas & Vanilla JS):** A lightweight, zero-dependency web interface styled after traditional Weiqi aesthetics. It draws the 19×19 Go board on an HTML5 Canvas, captures user clicks, translates them into standard GTP coordinates (e.g., `D4`), and sends the full game history to the backend via a REST API call. The frontend also enforces Go rules locally: after every stone placement it runs a capture detection pass and removes any surrounded groups from the board state before redrawing.
+1. **The Frontend (HTML5 Canvas & Vanilla JS):** A lightweight, zero-dependency web interface styled after traditional Weiqi aesthetics. It draws the 19×19 Go board on an HTML5 Canvas, captures user clicks, translates them into standard GTP coordinates (e.g., `D4`), and sends the full game history to the backend via a REST API call. The frontend enforces all core Go rules locally: captures, suicide prevention, the Ko rule, player passing, and double-pass game-over detection.
 
 2. **The Backend (FastAPI / Python):** A fast, modern web server with two responsibilities: serving the static HTML frontend to the browser, and acting as a bridge between the `/api/move` REST endpoint and the KataGo engine process.
 
@@ -20,13 +20,17 @@ The project is divided into three main components:
 
 - **Play vs. AI:** Place black stones by clicking on the board. KataGo responds automatically as white.
 - **Stone Captures:** Surrounded groups are detected and removed from the board immediately after each move, for both the player and the AI, including in self-play mode.
-- **AI Self-Play (觀戰模式):** Toggle spectator mode to watch KataGo play against itself, with moves displayed every 600 ms.
+- **Ko Rule:** The frontend tracks a fingerprint of every prior board position. Any move that would recreate a previous state is rejected with a visual error message (positional superko).
+- **Suicide Prevention:** Placing a stone into a group with no remaining liberties is blocked before it is committed, in accordance with Japanese and Chinese rules.
+- **Illegal Move Feedback:** Attempting an illegal move (Ko, suicide, or occupied intersection) briefly flashes a specific error message in the status panel instead of silently failing.
+- **Pass Turn (虛手):** A dedicated Pass button lets the player skip their turn. Two consecutive passes (player then AI, or vice versa) trigger automatic game-over and final scoring.
+- **AI Self-Play (觀戰模式):** Toggle spectator mode to watch KataGo play against itself, with moves displayed every 600 ms. Consecutive passes are tracked and end the game correctly.
 - **Difficulty Selection:** Three strength levels controlled by limiting KataGo's MCTS simulations (`maxVisits`):
   - **Easy** — 10 visits
   - **Medium** — 100 visits *(default)*
   - **Hard** — 500 visits
 - **Locked Difficulty:** The selector locks once the first move is played and resets when starting a new game.
-- **Game Over Lock:** Once the game ends (by pass or resignation), the board becomes inert — no further stones can be placed until a new game is started.
+- **Game Over Lock:** Once the game ends (by resignation or double pass), the board becomes inert and the Pass button is disabled until a new game is started.
 
 ---
 
@@ -34,7 +38,7 @@ The project is divided into three main components:
 
 - **KataGo vs. Standard LLMs:** Standard text-generation models (GPT, Llama, etc.) do not inherently understand the spatial strategy of Go. KataGo combines Monte Carlo Tree Search (MCTS) with a specialized neural network trained exclusively on Go, making it vastly superior for this task.
 
-- **Client-Side Capture Logic:** KataGo enforces Go rules internally when generating moves, but it does not stream board state back to the browser. Rather than adding a separate `/api/board` endpoint and an extra round-trip per move, capture detection is implemented directly in the frontend using three pure JS functions — `getNeighbors`, `getGroup`, and `getLiberties`. After any stone is placed, all opponent groups with zero liberties are deleted from `boardState` before the canvas is redrawn. The suicide rule (placing into a group with no liberties) is also handled.
+- **Client-Side Rule Enforcement:** KataGo enforces Go rules internally when generating moves, but it does not stream board state back to the browser. Rather than adding a dedicated `/api/board` endpoint and an extra round-trip per move, all rules are implemented directly in the frontend in pure JS. `tryPlaceStone()` simulates every player placement on a temporary copy of the board, resolves opponent captures, then checks for suicide and Ko before committing anything. AI moves go through a separate `applyAIMove()` path that skips validation (KataGo guarantees legality) but still resolves captures and records the position. Ko detection uses positional superko: `serializeBoard()` fingerprints every board state into `boardHistory`, and any move whose resulting fingerprint already appears in that list is rejected.
 
 - **Docker & CI/CD:** Setting up KataGo manually requires OS-specific binaries, neural network weight files (`.bin.gz`), and custom GTP configuration. Docker automates all of this. A GitHub Actions CI/CD pipeline automatically builds and pushes the image to GHCR on every push to `main`, so no local build is required.
 
