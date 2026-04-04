@@ -8,7 +8,6 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
-    # This permission is required to push to GHCR using the default GITHUB_TOKEN
     permissions:
       contents: read
       packages: write
@@ -24,10 +23,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # NEW STEP: Convert the repository name to lowercase and save it as an environment variable
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Automatically uses your GitHub username/organization and repository name
-          tags: ghcr.io/${{ github.repository }}/katago-web:latest
+          # Use the new lowercase environment variable here instead of github.repository
+          tags: ghcr.io/${{ env.REPO_LC }}/katago-web:latest
