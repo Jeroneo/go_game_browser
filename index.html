@@ -146,14 +146,25 @@
             margin-top: 25px;
             text-align: center;
             font-size: 0.75rem;
-            color: rgba(232, 220, 196, 0.35);
-            line-height: 1.5;
+            color: rgba(232, 220, 196, 0.4);
+            line-height: 1.6;
+        }
+
+        .credits a {
+            color: var(--gold-accent);
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        
+        .credits a:hover {
+            opacity: 0.7;
         }
 
         .board-wrapper {
             background: var(--wood-board);
             border: 12px solid var(--wood-border);
             box-shadow: 15px 15px 40px rgba(0,0,0,0.8);
+            cursor: crosshair;
         }
 
         canvas { display: block; max-width: 80vh; max-height: 80vh; }
@@ -188,7 +199,8 @@
 
             <div class="credits">
                 Jérôme DO ESPIRITO SANTO<br>
-                Shanghai University, 2026
+                Shanghai University, 2026<br>
+                <a href="https://github.com/Jeroneo/go_game_browser" target="_blank">View on GitHub</a>
             </div>
         </div>
 
@@ -216,6 +228,7 @@
         let isPlayerTurn     = true;
         let isSelfPlayActive = false;
         let isGameOver       = false;
+        let hoverCoord       = null; // Stores the current coordinate the mouse is hovering over
 
         // ─────────────────────────────────────────────
         // Go rules
@@ -248,25 +261,17 @@
             return libs;
         }
 
-        /** Stable string fingerprint of a board state (for Ko detection). */
         function serializeBoard(state) {
             return Object.keys(state).sort().map(k => k + state[k][0]).join('');
         }
 
-        /**
-         * Validates and applies a player stone placement.
-         * Returns 'ok' | 'occupied' | 'suicide' | 'ko'
-         * On 'ok' the real boardState and boardHistory are mutated.
-         */
         function tryPlaceStone(coord, color) {
             if (boardState[coord]) return 'occupied';
 
-            // Work on a copy so we can roll back if illegal
             const sim = { ...boardState };
             sim[coord] = color;
             const opp = color === 'black' ? 'white' : 'black';
 
-            // 1. Resolve opponent captures in simulation
             getNeighbors(coord).forEach(n => {
                 if (sim[n] === opp) {
                     const g = getGroup(n, sim);
@@ -274,24 +279,17 @@
                 }
             });
 
-            // 2. Suicide check — own group must still have liberties
             if (getLiberties(getGroup(coord, sim), sim).size === 0) return 'suicide';
 
-            // 3. Ko check — resulting position must not match any prior position
             const serial = serializeBoard(sim);
             if (boardHistory.some(h => h === serial)) return 'ko';
 
-            // Legal — commit
             boardHistory.push(serializeBoard(boardState));
             Object.keys(boardState).forEach(k => delete boardState[k]);
             Object.assign(boardState, sim);
             return 'ok';
         }
 
-        /**
-         * Applies an AI-generated move directly (KataGo guarantees legality).
-         * Resolves captures and records the position in boardHistory.
-         */
         function applyAIMove(coord, color) {
             boardState[coord] = color;
             const opp = color === 'black' ? 'white' : 'black';
@@ -320,9 +318,18 @@
             ctx.stroke();
             const hoshi = [4, 10, 16]; ctx.fillStyle = '#1a110a';
             hoshi.forEach(x => hoshi.forEach(y => { ctx.beginPath(); ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI); ctx.fill(); }));
+            
+            // Draw all placed stones
             Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
 
-            // Last-move marker (skip PASSes and already-captured coords)
+            // Draw translucent hover stone
+            if (hoverCoord && !boardState[hoverCoord] && isPlayerTurn && !isGameOver && !isSelfPlayActive) {
+                ctx.globalAlpha = 0.6; // Make it semi-transparent
+                drawStone(hoverCoord, 'black');
+                ctx.globalAlpha = 1.0; // Reset alpha
+            }
+
+            // Last-move marker
             if (moveHistory.length > 0) {
                 const last = moveHistory[moveHistory.length - 1];
                 if (last.toUpperCase() !== "PASS" && boardState[last]) {
@@ -368,7 +375,6 @@
             return `${winner} +${points} pts`;
         }
 
-        /** Briefly shows an illegal-move reason then restores the normal prompt. */
         function showIllegal(reason) {
             const msgs = { ko: '⛔ Illegal — Ko rule', suicide: '⛔ Illegal — Suicide', occupied: '⛔ Intersection occupied' };
             statusEl.innerHTML = `<span class="illegal-flash">${msgs[reason] || '⛔ Illegal move'}</span>`;
@@ -386,14 +392,15 @@
             } catch (e) { return { ai_move: "PASS", score: "Error" }; }
         }
 
-        /** Central game-over handler. */
         function endGame(score) {
             isGameOver = true;
             isSelfPlayActive = false;
             isPlayerTurn = false;
+            hoverCoord = null;
             passBtn.disabled = true;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
+            drawBoard();
         }
 
         // ─────────────────────────────────────────────
@@ -429,6 +436,7 @@
         function toggleSelfPlay() {
             isSelfPlayActive = !isSelfPlayActive;
             if (isSelfPlayActive) {
+                hoverCoord = null;
                 selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>";
                 passBtn.disabled = true;
                 isPlayerTurn = false;
@@ -439,6 +447,7 @@
                 isPlayerTurn = true;
                 statusEl.innerText = "Paused. Your Turn.";
             }
+            drawBoard();
         }
 
         // ─────────────────────────────────────────────
@@ -448,13 +457,14 @@
         async function playerPass() {
             if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
             isPlayerTurn = false;
+            hoverCoord = null;
+            drawBoard();
+            
             consecutivePasses++;
             moveHistory.push("PASS");
 
-            // If the player's pass is the second consecutive pass, end immediately
-            // without hitting the backend — the game is already decided.
             if (consecutivePasses >= 2) {
-                const data = await fetchMove(); // fetch final_score from backend
+                const data = await fetchMove(); 
                 endGame(data.score);
                 return;
             }
@@ -468,23 +478,48 @@
             if (move === "PASS") {
                 consecutivePasses++;
                 moveHistory.push("PASS");
-                // Two consecutive passes → game over
                 endGame(data.score);
                 return;
             }
 
-            // KataGo played a real move — reset pass counter
             consecutivePasses = 0;
             applyAIMove(data.ai_move, 'white');
             moveHistory.push(data.ai_move);
-            drawBoard();
             statusEl.innerText = "Your Turn (Black)";
             isPlayerTurn = true;
+            drawBoard();
         }
 
         // ─────────────────────────────────────────────
-        // Canvas click
+        // Canvas Interactions (Click & Hover)
         // ─────────────────────────────────────────────
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isPlayerTurn || isSelfPlayActive || isGameOver) {
+                if (hoverCoord !== null) {
+                    hoverCoord = null;
+                    drawBoard();
+                }
+                return;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
+            const coord = getGoCoord(x, y);
+
+            if (coord !== hoverCoord) {
+                hoverCoord = coord;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            if (hoverCoord !== null) {
+                hoverCoord = null;
+                drawBoard();
+            }
+        });
 
         canvas.addEventListener('click', async (e) => {
             if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
@@ -495,14 +530,14 @@
             const coord = getGoCoord(x, y);
             if (!coord) return;
 
-            // Validate & apply (suicide + Ko handled inside)
             const result = tryPlaceStone(coord, 'black');
             if (result !== 'ok') { showIllegal(result); return; }
 
             consecutivePasses = 0;
             moveHistory.push(coord);
-            drawBoard();
             isPlayerTurn = false;
+            hoverCoord = null; // Clear hover immediately after placing
+            drawBoard();
             statusEl.innerText = "KataGo is thinking...";
 
             const data = await fetchMove();
@@ -522,8 +557,8 @@
                 statusEl.innerText = "Your Turn (Black)";
             }
 
-            drawBoard();
             isPlayerTurn = true;
+            drawBoard();
         });
 
         // ─────────────────────────────────────────────
@@ -532,7 +567,7 @@
 
         function resetGame() {
             boardState = {}; moveHistory = []; boardHistory = [];
-            consecutivePasses = 0; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false;
+            consecutivePasses = 0; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false; hoverCoord = null;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             passBtn.disabled = false;
             statusEl.innerText = "Your Turn (Black)";
