@@ -9,10 +9,12 @@
     <style>
         :root {
             --bg-ink: #140f0c;
+            --bg-ink-light: #241a14;
             --paper-ivory: #e8dcc4;
             --gold-accent: #c5a059;
             --red-seal: #9e2a2b;
             --wood-board: #dcb35c;
+            --wood-board-dark: #c99a45;
             --wood-dark: #2a1c15;
             --wood-border: #4a3018;
             --win-green: #55a630;
@@ -22,12 +24,10 @@
 
         body {
             font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
-            background: radial-gradient(circle at center, #241a14 0%, var(--bg-ink) 100%);
+            background: radial-gradient(circle at center, var(--bg-ink-light) 0%, var(--bg-ink) 100%);
             color: var(--paper-ivory);
             margin: 0;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden; 
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -36,138 +36,226 @@
         .layout-container {
             display: flex;
             flex-direction: row;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: center;
-            gap: 60px;
+            gap: 80px;
             width: 100%;
-            max-width: 1300px;
-            padding: 20px;
+            max-width: 1400px;
+            padding: 40px 20px;
         }
 
         .left-panel {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            width: 320px;
+            width: 100%;
+            max-width: 380px;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 25px;
-            border-bottom: 1px solid rgba(197, 160, 89, 0.3);
-            padding-bottom: 15px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid rgba(197, 160, 89, 0.2);
+            padding-bottom: 20px;
+            position: relative;
         }
 
         .header h1 {
             margin: 0;
-            font-size: 2.8rem;
+            font-size: 3.2rem;
             color: var(--gold-accent);
-            letter-spacing: 2px;
+            letter-spacing: 4px;
             line-height: 1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
         .header .cn-title {
             display: block;
             font-family: "MingLiU", "SimSun", serif;
-            font-size: 2.2rem;
+            font-size: 2.5rem;
             color: var(--gold-accent);
-            margin: 5px 0;
-            letter-spacing: 12px;
-            padding-left: 12px;
-            opacity: 0.9;
+            margin: 10px 0;
+            letter-spacing: 16px;
+            padding-left: 16px;
+            opacity: 0.95;
         }
 
         .header p {
             margin: 5px 0 0 0;
             color: var(--paper-ivory);
-            font-size: 0.9rem;
-            letter-spacing: 3px;
-            opacity: 0.6;
+            font-size: 0.95rem;
+            letter-spacing: 4px;
+            opacity: 0.7;
             text-transform: uppercase;
         }
 
         .controls {
-            background: rgba(42, 28, 21, 0.6);
+            background: linear-gradient(180deg, rgba(42, 28, 21, 0.8) 0%, rgba(20, 15, 12, 0.8) 100%);
             border: 1px solid rgba(197, 160, 89, 0.2);
-            padding: 22px;
-            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 25px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .diff-group {
+            grid-column: span 2;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            margin-bottom: 5px;
+        }
+
+        .diff-group label {
+            font-size: 0.75rem;
+            color: var(--gold-accent);
+            margin-bottom: 6px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
 
         select {
-            background-color: var(--wood-dark);
+            background-color: var(--bg-ink);
             color: var(--paper-ivory);
-            border: 1px solid var(--gold-accent);
-            padding: 8px;
+            border: 1px solid rgba(197, 160, 89, 0.4);
+            padding: 10px 12px;
             font-family: inherit;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
         }
-
+        
+        select:hover:not(:disabled) { border-color: var(--gold-accent); }
+        select:focus { outline: none; border-color: var(--gold-accent); }
         select:disabled { opacity: 0.5; cursor: not-allowed; }
 
         button {
-            background-color: transparent;
+            background-color: rgba(0,0,0,0.2);
             color: var(--red-seal);
-            border: 2px solid var(--red-seal);
-            padding: 8px;
+            border: 1px solid var(--red-seal);
+            padding: 12px 10px;
             font-family: "MingLiU", "SimSun", serif;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             font-weight: bold;
+            border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
         }
 
-        button:hover { background-color: var(--red-seal); color: var(--paper-ivory); }
+        button small {
+            font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+            font-weight: normal;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        button:hover:not(:disabled) { 
+            background-color: var(--red-seal); 
+            color: var(--paper-ivory); 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(158, 42, 43, 0.3);
+        }
 
         .btn-self-play { color: var(--gold-accent); border-color: var(--gold-accent); }
-        .btn-self-play:hover { background-color: var(--gold-accent); color: var(--bg-ink); }
+        .btn-self-play:hover:not(:disabled) { 
+            background-color: var(--gold-accent); 
+            color: var(--bg-ink); 
+            box-shadow: 0 4px 12px rgba(197, 160, 89, 0.3);
+        }
 
-        .btn-pass { color: #7aab8a; border-color: #7aab8a; }
-        .btn-pass:hover { background-color: #7aab8a; color: var(--bg-ink); }
-        .btn-pass:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+        .btn-pass { color: #8cb99b; border-color: #8cb99b; }
+        .btn-pass:hover:not(:disabled) { 
+            background-color: #8cb99b; 
+            color: var(--bg-ink); 
+            box-shadow: 0 4px 12px rgba(140, 185, 155, 0.3);
+        }
+        
+        button:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
         .illegal-flash { color: #e05a5a; }
 
         .status-box {
-            margin-top: 15px;
-            padding: 12px;
-            border-left: 3px solid var(--gold-accent);
-            background: rgba(0,0,0,0.4);
-            min-height: 60px;
+            margin-top: 20px;
+            padding: 15px 20px;
+            border-left: 4px solid var(--gold-accent);
+            background: linear-gradient(90deg, rgba(197, 160, 89, 0.1) 0%, rgba(0,0,0,0) 100%);
+            border-radius: 0 4px 4px 0;
+            min-height: 65px;
             display: flex;
             align-items: center;
         }
 
-        #status { font-size: 0.95rem; line-height: 1.4; }
+        #status { 
+            font-size: 1.05rem; 
+            line-height: 1.5; 
+            letter-spacing: 0.5px;
+        }
+        
         .win-highlight { color: var(--win-green); font-weight: bold; }
 
         .credits {
-            margin-top: 25px;
+            margin-top: 35px;
             text-align: center;
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             color: rgba(232, 220, 196, 0.4);
-            line-height: 1.6;
+            line-height: 1.8;
         }
 
         .credits a {
             color: var(--gold-accent);
             text-decoration: none;
-            transition: opacity 0.2s;
+            border-bottom: 1px dotted var(--gold-accent);
+            padding-bottom: 2px;
+            transition: all 0.2s;
         }
         
         .credits a:hover {
             opacity: 0.7;
+            border-bottom-style: solid;
+        }
+
+        .right-panel {
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .board-wrapper {
-            background: var(--wood-board);
-            border: 12px solid var(--wood-border);
-            box-shadow: 15px 15px 40px rgba(0,0,0,0.8);
+            background: linear-gradient(135deg, var(--wood-board) 0%, var(--wood-board-dark) 100%);
+            border: 14px solid var(--wood-border);
+            border-radius: 6px;
+            box-shadow: 
+                20px 20px 50px rgba(0,0,0,0.8), 
+                inset 0 0 30px rgba(0,0,0,0.2),
+                inset 0 0 10px rgba(255,255,255,0.1);
             cursor: crosshair;
+            padding: 5px; /* Slight padding inside the border */
         }
 
-        canvas { display: block; max-width: 80vh; max-height: 80vh; }
+        canvas { 
+            display: block; 
+            max-width: 85vh; 
+            max-height: 85vh; 
+            border-radius: 2px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 900px) {
+            .layout-container { gap: 40px; padding: 20px; }
+            .left-panel { max-width: 100%; }
+            .header { margin-bottom: 20px; }
+            .board-wrapper { border-width: 8px; }
+            canvas { max-width: 100%; max-height: auto; }
+        }
     </style>
 </head>
 <body>
@@ -181,16 +269,19 @@
             </div>
 
             <div class="controls">
-                <label style="font-size: 0.75rem; color: var(--gold-accent); margin-bottom: -8px; letter-spacing: 1px;">AI STRENGTH</label>
-                <select id="difficulty">
-                    <option value="easy">Easy (10 Visits)</option>
-                    <option value="medium" selected>Medium (100 Visits)</option>
-                    <option value="hard">Hard (500 Visits)</option>
-                </select>
+                <div class="diff-group">
+                    <label for="difficulty">AI Strength</label>
+                    <select id="difficulty">
+                        <option value="easy">Easy (10 Visits)</option>
+                        <option value="medium" selected>Medium (100 Visits)</option>
+                        <option value="hard">Hard (500 Visits)</option>
+                    </select>
+                </div>
 
-                <button onclick="resetGame()">重新開始<br><small style="font-weight:normal; font-size: 0.7rem;">New Game</small></button>
-                <button class="btn-pass" id="passBtn" onclick="playerPass()">虛手<br><small style="font-weight:normal; font-size: 0.7rem;">Pass Turn</small></button>
-                <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<br><small style="font-weight:normal; font-size: 0.7rem;">AI Self-Play</small></button>
+                <button onclick="resetGame()">重新開始<small>New Game</small></button>
+                <button class="btn-pass" id="passBtn" onclick="playerPass()">虛手<small>Pass Turn</small></button>
+                <button class="btn-resign" id="resignBtn" onclick="playerResign()">投降<small>Resign</small></button>
+                <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<small>AI Self-Play</small></button>
             </div>
             
             <div class="status-box">
@@ -216,6 +307,7 @@
         const statusEl  = document.getElementById('status');
         const selfPlayBtn = document.getElementById('selfPlayBtn');
         const passBtn     = document.getElementById('passBtn');
+        const resignBtn   = document.getElementById('resignBtn');
         const diffSelect  = document.getElementById('difficulty');
 
         const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST";
@@ -398,6 +490,7 @@
             isPlayerTurn = false;
             hoverCoord = null;
             passBtn.disabled = true;
+            resignBtn.disabled = true;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
             drawBoard();
@@ -430,7 +523,7 @@
             applyAIMove(data.ai_move, turn);
             moveHistory.push(data.ai_move);
             drawBoard();
-            setTimeout(runSelfPlay, 600);
+            runSelfPlay();
         }
 
         function toggleSelfPlay() {
@@ -439,11 +532,13 @@
                 hoverCoord = null;
                 selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>";
                 passBtn.disabled = true;
+                resignBtn.disabled = true;
                 isPlayerTurn = false;
                 runSelfPlay();
             } else {
                 selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 passBtn.disabled = false;
+                resignBtn.disabled = false;
                 isPlayerTurn = true;
                 statusEl.innerText = "Paused. Your Turn.";
             }
@@ -488,6 +583,15 @@
             statusEl.innerText = "Your Turn (Black)";
             isPlayerTurn = true;
             drawBoard();
+        }
+
+        // ─────────────────────────────────────────────
+        // Player resign
+        // ─────────────────────────────────────────────
+
+        function playerResign() {
+            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
+            endGame("W+R");
         }
 
         // ─────────────────────────────────────────────
@@ -570,6 +674,7 @@
             consecutivePasses = 0; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false; hoverCoord = null;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             passBtn.disabled = false;
+            resignBtn.disabled = false;
             statusEl.innerText = "Your Turn (Black)";
             drawBoard();
         }
