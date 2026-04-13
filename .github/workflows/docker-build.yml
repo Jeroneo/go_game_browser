@@ -2,7 +2,7 @@ name: Build & Push Docker Image
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
 
 # Tell GitHub Actions to use the newer Node 24 to get rid of the deprecation warning
 env:
