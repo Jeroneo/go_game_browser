@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Dict, List
 import subprocess
 import threading
 import time
+import json
 
 app = FastAPI()
 
@@ -17,7 +19,6 @@ KATAGO_CMD = [
 ]
 
 # Lock to ensure only one GTP command is in-flight at a time.
-# Without this, concurrent requests corrupt the stdin/stdout pipe.
 katago_lock = threading.Lock()
 katago_process = None
 
@@ -55,13 +56,9 @@ def get_katago() -> subprocess.Popen:
 
 
 def send_gtp_command(command: str) -> str:
-    """
-    Sends a GTP command to KataGo and reads the response.
-    Thread-safe: acquires katago_lock for the full send-receive cycle.
-    """
+    """Sends a GTP command to KataGo and reads the response. Thread-safe."""
     with katago_lock:
         proc = get_katago()
-
         proc.stdin.write(command + "\n")
         proc.stdin.flush()
 
@@ -93,6 +90,55 @@ class GameState(BaseModel):
     board_size: int = 19
 
 
+# ---------------------------------------------------------
+# WebSocket Connection Manager for Online Multiplayer
+# ---------------------------------------------------------
+class ConnectionManager:
+    def __init__(self):
+        # Maps room_id to a list of active WebSocket connections
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, room_id: str):
+        await websocket.accept()
+        if room_id not in self.active_connections:
+            self.active_connections[room_id] = []
+        
+        # Prevent more than 2 players from joining as active players
+        if len(self.active_connections[room_id]) >= 2:
+            await websocket.send_json({"type": "error", "message": "Room is full"})
+            await websocket.close()
+            return False
+
+        self.active_connections[room_id].append(websocket)
+        
+        # First to join is Black, second is White
+        color = "black" if len(self.active_connections[room_id]) == 1 else "white"
+        await websocket.send_json({"type": "init", "color": color})
+
+        # Start the game when 2 players are present
+        if len(self.active_connections[room_id]) == 2:
+            await self.broadcast(room_id, {"type": "start"})
+            
+        return True
+
+    def disconnect(self, websocket: WebSocket, room_id: str):
+        if room_id in self.active_connections:
+            if websocket in self.active_connections[room_id]:
+                self.active_connections[room_id].remove(websocket)
+            if not self.active_connections[room_id]:
+                del self.active_connections[room_id]
+
+    async def broadcast(self, room_id: str, message: dict):
+        if room_id in self.active_connections:
+            for connection in self.active_connections[room_id]:
+                await connection.send_json(message)
+
+manager = ConnectionManager()
+
+
+# ---------------------------------------------------------
+# API Endpoints
+# ---------------------------------------------------------
 @app.get("/")
 async def serve_frontend():
     return FileResponse("index.html")
@@ -100,6 +146,7 @@ async def serve_frontend():
 
 @app.post("/api/move")
 async def play_move(state: GameState):
+    """Used for 1-Player vs AI."""
     visits_map = {"easy": 10, "medium": 100, "hard": 500}
     max_visits = visits_map.get(state.difficulty, 100)
 
@@ -109,7 +156,7 @@ async def play_move(state: GameState):
         try:
             send_gtp_command(f"kata-set-param maxVisits {max_visits}")
         except Exception:
-            pass  # Non-fatal: older KataGo builds may not support this param
+            pass 
 
         colors = ["black", "white"]
         for idx, move in enumerate(state.history):
@@ -119,15 +166,11 @@ async def play_move(state: GameState):
         ai_move = send_gtp_command(f"genmove {ai_color}")
 
         score = None
-
         if "RESIGN" in ai_move.upper():
             winner = "W" if ai_color == "black" else "B"
             score = f"{winner}+R"
-
         elif "PASS" in ai_move.upper():
             score = send_gtp_command("final_score")
-            # `final_score` can return "PASS" when territory is ambiguous;
-            # fall back to KataGo's score estimation in that case.
             if not score or score.upper() == "PASS":
                 score = send_gtp_command("kata-compute-score")
 
@@ -136,3 +179,38 @@ async def play_move(state: GameState):
     except Exception as e:
         print(f"Backend error: {e}")
         return {"ai_move": "PASS", "score": "B+0.5"}
+
+
+@app.post("/api/score")
+async def calculate_score(state: GameState):
+    """Used to score the board for 2-Player (Local & Online) when both pass."""
+    try:
+        send_gtp_command("clear_board")
+        send_gtp_command(f"boardsize {state.board_size}")
+        colors = ["black", "white"]
+        for idx, move in enumerate(state.history):
+            if move.upper() != "PASS":
+                send_gtp_command(f"play {colors[idx % 2]} {move}")
+        
+        score = send_gtp_command("kata-compute-score")
+        return {"score": score}
+    except Exception as e:
+        print(f"Scoring error: {e}")
+        return {"score": "Unknown"}
+
+
+@app.websocket("/ws/{room_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str):
+    success = await manager.connect(websocket, room_id)
+    if not success:
+        return
+        
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            # Route the move/pass/resign to both players in the room
+            await manager.broadcast(room_id, message)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, room_id)
+        await manager.broadcast(room_id, {"type": "opponent_disconnected"})

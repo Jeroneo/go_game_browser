@@ -126,11 +126,25 @@
             border-radius: 4px;
             cursor: pointer;
             transition: border-color 0.3s ease;
+            margin-bottom: 10px;
         }
         
         select:hover:not(:disabled) { border-color: var(--gold-accent); }
         select:focus { outline: none; border-color: var(--gold-accent); }
         select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        input[type="text"] {
+            background-color: var(--bg-ink);
+            color: var(--paper-ivory);
+            border: 1px solid rgba(197, 160, 89, 0.4);
+            padding: 10px 12px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--gold-accent); }
 
         button {
             background-color: rgba(0,0,0,0.2);
@@ -238,7 +252,7 @@
                 inset 0 0 30px rgba(0,0,0,0.2),
                 inset 0 0 10px rgba(255,255,255,0.1);
             cursor: crosshair;
-            padding: 5px; /* Slight padding inside the border */
+            padding: 5px;
         }
 
         canvas { 
@@ -248,7 +262,6 @@
             border-radius: 2px;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 900px) {
             .layout-container { gap: 40px; padding: 20px; }
             .left-panel { max-width: 100%; }
@@ -270,17 +283,31 @@
 
             <div class="controls">
                 <div class="diff-group">
-                    <label for="difficulty">AI Strength</label>
-                    <select id="difficulty">
-                        <option value="easy">Easy (10 Visits)</option>
-                        <option value="medium" selected>Medium (100 Visits)</option>
-                        <option value="hard">Hard (500 Visits)</option>
+                    <label for="gameMode">Game Mode</label>
+                    <select id="gameMode" onchange="handleModeChange()">
+                        <option value="1p" selected>1 Player (vs AI)</option>
+                        <option value="2p_local">2 Players (Local)</option>
+                        <option value="2p_online">2 Players (Online)</option>
                     </select>
+
+                    <div id="aiDifficultyGroup">
+                        <label for="difficulty">AI Strength</label>
+                        <select id="difficulty">
+                            <option value="easy">Easy (10 Visits)</option>
+                            <option value="medium" selected>Medium (100 Visits)</option>
+                            <option value="hard">Hard (500 Visits)</option>
+                        </select>
+                    </div>
+
+                    <div id="onlineGroup" style="display: none;">
+                        <label for="roomLink">Invite Link (Click to Copy)</label>
+                        <input type="text" id="roomLink" readonly onclick="copyLink()">
+                    </div>
                 </div>
 
                 <button onclick="resetGame()">重新開始<small>New Game</small></button>
-                <button class="btn-pass" id="passBtn" onclick="playerPass()">虛手<small>Pass Turn</small></button>
-                <button class="btn-resign" id="resignBtn" onclick="playerResign()">投降<small>Resign</small></button>
+                <button class="btn-pass" id="passBtn" onclick="playerAction('PASS')">虛手<small>Pass Turn</small></button>
+                <button class="btn-resign" id="resignBtn" onclick="playerAction('RESIGN')">投降<small>Resign</small></button>
                 <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<small>AI Self-Play</small></button>
             </div>
             
@@ -309,21 +336,107 @@
         const passBtn     = document.getElementById('passBtn');
         const resignBtn   = document.getElementById('resignBtn');
         const diffSelect  = document.getElementById('difficulty');
+        const modeSelect  = document.getElementById('gameMode');
+        const onlineGroup = document.getElementById('onlineGroup');
+        const aiDiffGroup = document.getElementById('aiDifficultyGroup');
+        const roomLinkInput = document.getElementById('roomLink');
 
         const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST";
 
         // ── Mutable game state ──
-        let boardState       = {};   // coord → 'black'|'white'
-        let moveHistory      = [];   // GTP move list sent to backend
-        let boardHistory     = [];   // serialised board after each half-move (for Ko)
+        let boardState       = {};   
+        let moveHistory      = [];   
+        let boardHistory     = [];   
         let consecutivePasses = 0;
-        let isPlayerTurn     = true;
-        let isSelfPlayActive = false;
         let isGameOver       = false;
-        let hoverCoord       = null; // Stores the current coordinate the mouse is hovering over
+        let hoverCoord       = null;
+
+        // Mode Management
+        let currentMode      = '1p'; // '1p', '2p_local', '2p_online'
+        let currentTurnColor = 'black'; 
+        let myOnlineColor    = null; // For online play
+        let isSelfPlayActive = false;
+        let ws               = null;
 
         // ─────────────────────────────────────────────
-        // Go rules
+        // Initialization & Mode Switching
+        // ─────────────────────────────────────────────
+
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const roomCode = params.get('room');
+            if (roomCode) {
+                modeSelect.value = '2p_online';
+                handleModeChange(roomCode);
+            } else {
+                drawBoard();
+            }
+        };
+
+        function handleModeChange(existingRoomCode = null) {
+            currentMode = modeSelect.value;
+            
+            if (ws) { ws.close(); ws = null; }
+            
+            if (currentMode === '1p') {
+                aiDiffGroup.style.display = 'block';
+                onlineGroup.style.display = 'none';
+                selfPlayBtn.style.display = 'flex';
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (currentMode === '2p_local') {
+                aiDiffGroup.style.display = 'none';
+                onlineGroup.style.display = 'none';
+                selfPlayBtn.style.display = 'none';
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (currentMode === '2p_online') {
+                aiDiffGroup.style.display = 'none';
+                onlineGroup.style.display = 'block';
+                selfPlayBtn.style.display = 'none';
+                
+                const roomCode = existingRoomCode || Math.random().toString(36).substring(2, 8);
+                const fullLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+                roomLinkInput.value = fullLink;
+                window.history.replaceState({}, document.title, `?room=${roomCode}`);
+                
+                connectWebSocket(roomCode);
+            }
+            resetGame();
+        }
+
+        function copyLink() {
+            roomLinkInput.select();
+            document.execCommand('copy');
+            statusEl.innerText = "Link Copied! Send it to your opponent.";
+            setTimeout(updateStatusUI, 2000);
+        }
+
+        function connectWebSocket(roomId) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/${roomId}`);
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                
+                if (msg.type === 'init') {
+                    myOnlineColor = msg.color;
+                    statusEl.innerText = `Connected. You are ${myOnlineColor.toUpperCase()}. Waiting for opponent...`;
+                } else if (msg.type === 'start') {
+                    resetGame(false); // Reset without destroying WS
+                    statusEl.innerText = `Opponent joined! Game Start. ${currentTurnColor === myOnlineColor ? 'Your turn!' : "Opponent's turn."}`;
+                } else if (msg.type === 'move') {
+                    applyNetworkAction(msg.action, msg.coord, msg.color);
+                } else if (msg.type === 'opponent_disconnected') {
+                    statusEl.innerText = "Opponent disconnected.";
+                    isGameOver = true;
+                } else if (msg.type === 'error') {
+                    statusEl.innerText = msg.message;
+                    ws.close();
+                }
+            };
+        }
+
+        // ─────────────────────────────────────────────
+        // Go rules & Core Logic
         // ─────────────────────────────────────────────
 
         function getNeighbors(coord) {
@@ -382,7 +495,7 @@
             return 'ok';
         }
 
-        function applyAIMove(coord, color) {
+        function applyConfirmedMove(coord, color) {
             boardState[coord] = color;
             const opp = color === 'black' ? 'white' : 'black';
             getNeighbors(coord).forEach(n => {
@@ -395,10 +508,202 @@
         }
 
         // ─────────────────────────────────────────────
+        // Game Flow & Networking
+        // ─────────────────────────────────────────────
+
+        function isMyTurn() {
+            if (isGameOver) return false;
+            if (currentMode === '1p') return currentTurnColor === 'black' && !isSelfPlayActive;
+            if (currentMode === '2p_local') return true;
+            if (currentMode === '2p_online') return currentTurnColor === myOnlineColor;
+            return false;
+        }
+
+        function updateStatusUI() {
+            if (isGameOver) return;
+            
+            if (currentMode === '1p') {
+                statusEl.innerText = currentTurnColor === 'black' ? "Your Turn (Black)" : "KataGo is thinking...";
+            } else if (currentMode === '2p_local') {
+                statusEl.innerText = `Turn: ${currentTurnColor === 'black' ? 'Black' : 'White'}`;
+            } else if (currentMode === '2p_online') {
+                if (!myOnlineColor) {
+                    statusEl.innerText = "Waiting for opponent...";
+                } else {
+                    statusEl.innerText = currentTurnColor === myOnlineColor ? `Your Turn (${myOnlineColor})` : `Waiting for opponent (${currentTurnColor})...`;
+                }
+            }
+        }
+
+        function advanceTurn() {
+            currentTurnColor = currentTurnColor === 'black' ? 'white' : 'black';
+            updateStatusUI();
+            drawBoard();
+        }
+
+        // Handles clicks from the canvas (Places a stone)
+        async function handleBoardClick(coord) {
+            if (!isMyTurn()) return;
+
+            const result = tryPlaceStone(coord, currentTurnColor);
+            if (result !== 'ok') { showIllegal(result); return; }
+
+            const colorPlayed = currentTurnColor;
+            consecutivePasses = 0;
+            moveHistory.push(coord);
+            hoverCoord = null;
+            
+            if (currentMode === '2p_online') {
+                ws.send(JSON.stringify({ type: 'move', action: 'play', coord: coord, color: colorPlayed }));
+                advanceTurn(); // Predict locally immediately
+            } else {
+                advanceTurn();
+                if (currentMode === '1p') {
+                    await fetchAIMove();
+                }
+            }
+        }
+
+        // Handles UI buttons (Pass / Resign)
+        async function playerAction(actionType) { // 'PASS' or 'RESIGN'
+            if (!isMyTurn()) return;
+
+            const colorPlayed = currentTurnColor;
+            
+            if (currentMode === '2p_online') {
+                ws.send(JSON.stringify({ type: 'move', action: actionType, color: colorPlayed }));
+                // Local prediction handled via network loop back for simplicity, but we can do it here:
+                applyNetworkAction(actionType, null, colorPlayed, true); 
+            } else {
+                applyNetworkAction(actionType, null, colorPlayed);
+                if (currentMode === '1p' && !isGameOver) {
+                    await fetchAIMove();
+                }
+            }
+        }
+
+        // Applies actions triggered locally (2p_local), network (2p_online), or UI (Pass/Resign)
+        async function applyNetworkAction(action, coord, color, skipSend = false) {
+            if (action === 'RESIGN') {
+                endGame(color === 'black' ? 'W+R' : 'B+R');
+                return;
+            }
+
+            if (action === 'PASS') {
+                consecutivePasses++;
+                moveHistory.push('PASS');
+                if (consecutivePasses >= 2) {
+                    await finalizeGameScore();
+                } else {
+                    if (currentTurnColor === color) advanceTurn(); 
+                }
+                return;
+            }
+
+            if (action === 'play') {
+                consecutivePasses = 0;
+                // If the move didn't come from my local prediction, apply it.
+                if (currentTurnColor === color) {
+                    applyConfirmedMove(coord, color);
+                    moveHistory.push(coord);
+                    advanceTurn();
+                }
+            }
+        }
+
+        async function fetchAIMove() {
+            try {
+                const res = await fetch('/api/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value, board_size: boardSize })
+                });
+                const data = await res.json();
+                const ai_move = data.ai_move.toUpperCase();
+
+                if (ai_move === "RESIGN") {
+                    endGame(data.score);
+                } else if (ai_move === "PASS") {
+                    consecutivePasses++;
+                    moveHistory.push("PASS");
+                    if (consecutivePasses >= 2) endGame(data.score);
+                    else advanceTurn();
+                } else {
+                    consecutivePasses = 0;
+                    applyConfirmedMove(data.ai_move, 'white');
+                    moveHistory.push(data.ai_move);
+                    advanceTurn();
+                }
+            } catch (e) {
+                console.error(e);
+                statusEl.innerText = "Error communicating with AI.";
+            }
+        }
+
+        async function finalizeGameScore() {
+            statusEl.innerText = "Computing final score...";
+            try {
+                const res = await fetch('/api/score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: moveHistory, difficulty: 'easy', board_size: boardSize })
+                });
+                const data = await res.json();
+                endGame(data.score);
+            } catch(e) {
+                endGame("Error");
+            }
+        }
+
+        function endGame(score) {
+            isGameOver = true;
+            isSelfPlayActive = false;
+            hoverCoord = null;
+            passBtn.disabled = true;
+            resignBtn.disabled = true;
+            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+            statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
+            drawBoard();
+        }
+
+        // ─────────────────────────────────────────────
+        // Canvas Interactions (Click & Hover)
+        // ─────────────────────────────────────────────
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isMyTurn()) {
+                if (hoverCoord !== null) { hoverCoord = null; drawBoard(); }
+                return;
+            }
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
+            const coord = getGoCoord(x, y);
+
+            if (coord !== hoverCoord) {
+                hoverCoord = coord;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            if (hoverCoord !== null) { hoverCoord = null; drawBoard(); }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!isMyTurn()) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
+            const coord = getGoCoord(x, y);
+            if (coord) handleBoardClick(coord);
+        });
+
+        // ─────────────────────────────────────────────
         // Drawing
         // ─────────────────────────────────────────────
 
-        function updateDifficultyState() { diffSelect.disabled = (moveHistory.length > 0); }
+        function updateDifficultyState() { diffSelect.disabled = (moveHistory.length > 0); modeSelect.disabled = (moveHistory.length > 0 && currentMode === '2p_online'); }
 
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -411,17 +716,14 @@
             const hoshi = [4, 10, 16]; ctx.fillStyle = '#1a110a';
             hoshi.forEach(x => hoshi.forEach(y => { ctx.beginPath(); ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI); ctx.fill(); }));
             
-            // Draw all placed stones
             Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
 
-            // Draw translucent hover stone
-            if (hoverCoord && !boardState[hoverCoord] && isPlayerTurn && !isGameOver && !isSelfPlayActive) {
-                ctx.globalAlpha = 0.6; // Make it semi-transparent
-                drawStone(hoverCoord, 'black');
-                ctx.globalAlpha = 1.0; // Reset alpha
+            if (hoverCoord && !boardState[hoverCoord] && isMyTurn()) {
+                ctx.globalAlpha = 0.6; 
+                drawStone(hoverCoord, currentTurnColor);
+                ctx.globalAlpha = 1.0; 
             }
 
-            // Last-move marker
             if (moveHistory.length > 0) {
                 const last = moveHistory[moveHistory.length - 1];
                 if (last.toUpperCase() !== "PASS" && boardState[last]) {
@@ -455,10 +757,6 @@
             return (col >= 0 && col < boardSize && row >= 1 && row <= boardSize) ? columns[col] + (boardSize - row + 1) : null;
         }
 
-        // ─────────────────────────────────────────────
-        // Helpers
-        // ─────────────────────────────────────────────
-
         function formatScore(s) {
             if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
             if (s.includes("R")) return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
@@ -470,60 +768,40 @@
         function showIllegal(reason) {
             const msgs = { ko: '⛔ Illegal — Ko rule', suicide: '⛔ Illegal — Suicide', occupied: '⛔ Intersection occupied' };
             statusEl.innerHTML = `<span class="illegal-flash">${msgs[reason] || '⛔ Illegal move'}</span>`;
-            setTimeout(() => { if (!isGameOver) statusEl.innerText = 'Your Turn (Black)'; }, 1800);
+            setTimeout(() => { if (!isGameOver) updateStatusUI(); }, 1800);
         }
 
-        async function fetchMove() {
+        // ─────────────────────────────────────────────
+        // Self-play (Only in 1P mode)
+        // ─────────────────────────────────────────────
+        async function runSelfPlay() {
+            if (!isSelfPlayActive) return;
+            statusEl.innerText = `AI vs AI Thinking...`;
+            
             try {
                 const res = await fetch('/api/move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value, board_size: boardSize })
                 });
-                return await res.json();
-            } catch (e) { return { ai_move: "PASS", score: "Error" }; }
-        }
+                const data = await res.json();
+                const move = data.ai_move.toUpperCase();
 
-        function endGame(score) {
-            isGameOver = true;
-            isSelfPlayActive = false;
-            isPlayerTurn = false;
-            hoverCoord = null;
-            passBtn.disabled = true;
-            resignBtn.disabled = true;
-            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
-            statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
-            drawBoard();
-        }
-
-        // ─────────────────────────────────────────────
-        // Self-play
-        // ─────────────────────────────────────────────
-
-        async function runSelfPlay() {
-            if (!isSelfPlayActive) return;
-            const turn = moveHistory.length % 2 === 0 ? 'black' : 'white';
-            statusEl.innerText = `Thinking (${turn === 'black' ? 'Black' : 'White'})...`;
-            const data = await fetchMove();
-            const move = data.ai_move.toUpperCase();
-
-            if (move === "RESIGN") { endGame(data.score); return; }
-
-            if (move === "PASS") {
-                consecutivePasses++;
-                moveHistory.push("PASS");
-                if (consecutivePasses >= 2) { endGame(data.score); return; }
-                statusEl.innerText = `${turn === 'black' ? 'Black' : 'White'} passes...`;
-                drawBoard();
+                if (move === "RESIGN") { endGame(data.score); return; }
+                if (move === "PASS") {
+                    consecutivePasses++;
+                    moveHistory.push("PASS");
+                    if (consecutivePasses >= 2) { endGame(data.score); return; }
+                } else {
+                    consecutivePasses = 0;
+                    applyConfirmedMove(data.ai_move, currentTurnColor);
+                    moveHistory.push(data.ai_move);
+                }
+                advanceTurn();
                 setTimeout(runSelfPlay, 800);
-                return;
+            } catch (e) {
+                toggleSelfPlay();
             }
-
-            consecutivePasses = 0;
-            applyAIMove(data.ai_move, turn);
-            moveHistory.push(data.ai_move);
-            drawBoard();
-            runSelfPlay();
         }
 
         function toggleSelfPlay() {
@@ -533,153 +811,35 @@
                 selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>";
                 passBtn.disabled = true;
                 resignBtn.disabled = true;
-                isPlayerTurn = false;
                 runSelfPlay();
             } else {
                 selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 passBtn.disabled = false;
                 resignBtn.disabled = false;
-                isPlayerTurn = true;
-                statusEl.innerText = "Paused. Your Turn.";
+                updateStatusUI();
             }
             drawBoard();
         }
 
-        // ─────────────────────────────────────────────
-        // Player pass
-        // ─────────────────────────────────────────────
-
-        async function playerPass() {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
-            isPlayerTurn = false;
-            hoverCoord = null;
-            drawBoard();
-            
-            consecutivePasses++;
-            moveHistory.push("PASS");
-
-            if (consecutivePasses >= 2) {
-                const data = await fetchMove(); 
-                endGame(data.score);
-                return;
-            }
-
-            statusEl.innerText = "You passed. KataGo is thinking...";
-            const data = await fetchMove();
-            const move = data.ai_move.toUpperCase();
-
-            if (move === "RESIGN") { endGame(data.score); return; }
-
-            if (move === "PASS") {
-                consecutivePasses++;
-                moveHistory.push("PASS");
-                endGame(data.score);
-                return;
-            }
-
-            consecutivePasses = 0;
-            applyAIMove(data.ai_move, 'white');
-            moveHistory.push(data.ai_move);
-            statusEl.innerText = "Your Turn (Black)";
-            isPlayerTurn = true;
-            drawBoard();
-        }
-
-        // ─────────────────────────────────────────────
-        // Player resign
-        // ─────────────────────────────────────────────
-
-        function playerResign() {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
-            endGame("W+R");
-        }
-
-        // ─────────────────────────────────────────────
-        // Canvas Interactions (Click & Hover)
-        // ─────────────────────────────────────────────
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) {
-                if (hoverCoord !== null) {
-                    hoverCoord = null;
-                    drawBoard();
-                }
-                return;
-            }
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
-            const coord = getGoCoord(x, y);
-
-            if (coord !== hoverCoord) {
-                hoverCoord = coord;
-                drawBoard();
-            }
-        });
-
-        canvas.addEventListener('mouseout', () => {
-            if (hoverCoord !== null) {
-                hoverCoord = null;
-                drawBoard();
-            }
-        });
-
-        canvas.addEventListener('click', async (e) => {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
-            const coord = getGoCoord(x, y);
-            if (!coord) return;
-
-            const result = tryPlaceStone(coord, 'black');
-            if (result !== 'ok') { showIllegal(result); return; }
-
-            consecutivePasses = 0;
-            moveHistory.push(coord);
-            isPlayerTurn = false;
-            hoverCoord = null; // Clear hover immediately after placing
-            drawBoard();
-            statusEl.innerText = "KataGo is thinking...";
-
-            const data = await fetchMove();
-            const move = data.ai_move.toUpperCase();
-
-            if (move === "RESIGN") { endGame(data.score); return; }
-
-            if (move === "PASS") {
-                consecutivePasses++;
-                moveHistory.push("PASS");
-                if (consecutivePasses >= 2) { endGame(data.score); return; }
-                statusEl.innerText = "KataGo passed. Your Turn (Black)";
-            } else {
-                consecutivePasses = 0;
-                applyAIMove(data.ai_move, 'white');
-                moveHistory.push(data.ai_move);
-                statusEl.innerText = "Your Turn (Black)";
-            }
-
-            isPlayerTurn = true;
-            drawBoard();
-        });
-
-        // ─────────────────────────────────────────────
-        // Reset
-        // ─────────────────────────────────────────────
-
-        function resetGame() {
+        function resetGame(fullReset = true) {
             boardState = {}; moveHistory = []; boardHistory = [];
-            consecutivePasses = 0; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false; hoverCoord = null;
+            consecutivePasses = 0; 
+            currentTurnColor = 'black';
+            isSelfPlayActive = false; 
+            isGameOver = false; 
+            hoverCoord = null;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             passBtn.disabled = false;
             resignBtn.disabled = false;
-            statusEl.innerText = "Your Turn (Black)";
+            
+            if (fullReset && currentMode === '2p_online' && ws) {
+                // Changing back and forth essentially resets the socket room natively
+            }
+
+            updateStatusUI();
             drawBoard();
         }
 
-        drawBoard();
     </script>
 </body>
 </html>
