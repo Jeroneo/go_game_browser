@@ -36,12 +36,12 @@
         .layout-container {
             display: flex;
             flex-direction: row;
-            flex-wrap: wrap;
+            flex-wrap: nowrap; /* FORCED SIDE-BY-SIDE: Prevents left panel from jumping on top of board */
             align-items: center;
             justify-content: center;
-            gap: 80px;
+            gap: 50px; /* Slightly reduced gap to ensure it fits nicely */
             width: 100%;
-            max-width: 1400px;
+            max-width: 1600px; 
             padding: 40px 20px;
         }
 
@@ -51,6 +51,7 @@
             justify-content: center;
             width: 100%;
             max-width: 380px;
+            flex-shrink: 0; /* Prevents the control panel from squishing */
         }
 
         .header {
@@ -237,10 +238,13 @@
             border-bottom-style: solid;
         }
 
+        /* --- Right Panel: Board & Chat --- */
         .right-panel {
             display: flex;
+            flex-direction: row; 
             justify-content: center;
             align-items: center;
+            gap: 30px; /* Reduced gap between board and chat */
         }
 
         .board-wrapper {
@@ -253,6 +257,7 @@
                 inset 0 0 10px rgba(255,255,255,0.1);
             cursor: crosshair;
             padding: 5px;
+            flex-shrink: 0;
         }
 
         canvas { 
@@ -262,8 +267,79 @@
             border-radius: 2px;
         }
 
+        /* --- Online Chat UI --- */
+        .chat-container {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            width: 320px;
+            height: 678px; 
+            max-height: 85vh; 
+            background: linear-gradient(180deg, rgba(42, 28, 21, 0.8) 0%, rgba(20, 15, 12, 0.8) 100%);
+            border: 1px solid rgba(197, 160, 89, 0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 8px;
+            flex-shrink: 1; /* Allow chat to shrink if needed */
+        }
+
+        .chat-header {
+            color: var(--gold-accent);
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(197, 160, 89, 0.2);
+            padding-bottom: 10px;
+            margin: 0;
+            text-align: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            background-color: rgba(0,0,0,0.3);
+            border: 1px solid rgba(197, 160, 89, 0.2);
+            border-radius: 4px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: var(--paper-ivory);
+            line-height: 1.4;
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input-group input {
+            flex: 1;
+            margin: 0;
+            padding: 8px 12px;
+        }
+
+        .chat-input-group button {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            flex-direction: row;
+            border-color: var(--gold-accent);
+            color: var(--gold-accent);
+        }
+
+        .chat-input-group button:hover:not(:disabled) {
+            background-color: var(--gold-accent);
+            color: var(--bg-ink);
+        }
+
+        @media (max-width: 1200px) {
+            /* If the screen is too small, stack the chat below the board, 
+               but keep the entire right-panel NEXT to the left panel */
+            .right-panel { flex-direction: column; align-items: center; }
+            .chat-container { width: 100%; height: 300px; max-width: 678px; }
+        }
+
         @media (max-width: 900px) {
-            .layout-container { gap: 40px; padding: 20px; }
+            /* Only on mobile screens do we allow everything to finally wrap vertically */
+            .layout-container { flex-wrap: wrap; gap: 40px; padding: 20px; }
             .left-panel { max-width: 100%; }
             .header { margin-bottom: 20px; }
             .board-wrapper { border-width: 8px; }
@@ -326,6 +402,15 @@
             <div class="board-wrapper">
                 <canvas id="goBoard" width="650" height="650"></canvas>
             </div>
+
+            <div class="chat-container" id="chatContainer">
+                <h3 class="chat-header">Match Chat</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-group">
+                    <input type="text" id="chatInput" placeholder="Send a message..." onkeypress="handleChatKeyPress(event)">
+                    <button onclick="sendChatMessage()">Send</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -340,10 +425,13 @@
         const onlineGroup = document.getElementById('onlineGroup');
         const aiDiffGroup = document.getElementById('aiDifficultyGroup');
         const roomLinkInput = document.getElementById('roomLink');
+        
+        const chatContainer = document.getElementById('chatContainer');
+        const chatMessages  = document.getElementById('chatMessages');
+        const chatInput     = document.getElementById('chatInput');
 
         const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST";
 
-        // ── Mutable game state ──
         let boardState       = {};   
         let moveHistory      = [];   
         let boardHistory     = [];   
@@ -351,16 +439,11 @@
         let isGameOver       = false;
         let hoverCoord       = null;
 
-        // Mode Management
-        let currentMode      = '1p'; // '1p', '2p_local', '2p_online'
+        let currentMode      = '1p';
         let currentTurnColor = 'black'; 
-        let myOnlineColor    = null; // For online play
+        let myOnlineColor    = null; 
         let isSelfPlayActive = false;
         let ws               = null;
-
-        // ─────────────────────────────────────────────
-        // Initialization & Mode Switching
-        // ─────────────────────────────────────────────
 
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
@@ -382,16 +465,20 @@
                 aiDiffGroup.style.display = 'block';
                 onlineGroup.style.display = 'none';
                 selfPlayBtn.style.display = 'flex';
+                chatContainer.style.display = 'none';
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else if (currentMode === '2p_local') {
                 aiDiffGroup.style.display = 'none';
                 onlineGroup.style.display = 'none';
                 selfPlayBtn.style.display = 'none';
+                chatContainer.style.display = 'none';
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else if (currentMode === '2p_online') {
                 aiDiffGroup.style.display = 'none';
                 onlineGroup.style.display = 'block';
                 selfPlayBtn.style.display = 'none';
+                chatContainer.style.display = 'flex'; 
+                chatMessages.innerHTML = ''; 
                 
                 const roomCode = existingRoomCode || Math.random().toString(36).substring(2, 8);
                 const fullLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
@@ -420,13 +507,18 @@
                 if (msg.type === 'init') {
                     myOnlineColor = msg.color;
                     statusEl.innerText = `Connected. You are ${myOnlineColor.toUpperCase()}. Waiting for opponent...`;
+                    appendSystemMessage(`Welcome to room! You are playing as ${myOnlineColor.toUpperCase()}`);
                 } else if (msg.type === 'start') {
-                    resetGame(false); // Reset without destroying WS
+                    resetGame(false); 
                     statusEl.innerText = `Opponent joined! Game Start. ${currentTurnColor === myOnlineColor ? 'Your turn!' : "Opponent's turn."}`;
+                    appendSystemMessage("Opponent connected. Game started!");
                 } else if (msg.type === 'move') {
                     applyNetworkAction(msg.action, msg.coord, msg.color);
+                } else if (msg.type === 'chat') {
+                    appendChatMessage(msg.color, msg.text);
                 } else if (msg.type === 'opponent_disconnected') {
                     statusEl.innerText = "Opponent disconnected.";
+                    appendSystemMessage("Your opponent disconnected.");
                     isGameOver = true;
                 } else if (msg.type === 'error') {
                     statusEl.innerText = msg.message;
@@ -435,9 +527,40 @@
             };
         }
 
-        // ─────────────────────────────────────────────
-        // Go rules & Core Logic
-        // ─────────────────────────────────────────────
+        function sendChatMessage() {
+            const text = chatInput.value.trim();
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'chat', color: myOnlineColor, text: text }));
+                chatInput.value = '';
+            }
+        }
+
+        function handleChatKeyPress(e) {
+            if (e.key === 'Enter') sendChatMessage();
+        }
+
+        function appendChatMessage(color, text) {
+            const msgEl = document.createElement('div');
+            msgEl.style.marginBottom = '6px';
+            const senderName = color ? color.charAt(0).toUpperCase() + color.slice(1) : 'Spectator';
+            const nameColor = color === 'black' ? '#8cb99b' : (color === 'white' ? '#e8dcc4' : '#c5a059');
+            
+            msgEl.innerHTML = `<strong style="color: ${nameColor}">${senderName}:</strong> <span class="msg-text"></span>`;
+            msgEl.querySelector('.msg-text').innerText = text;
+            
+            chatMessages.appendChild(msgEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function appendSystemMessage(text) {
+            const msgEl = document.createElement('div');
+            msgEl.style.marginBottom = '6px';
+            msgEl.style.color = '#c5a059';
+            msgEl.style.fontStyle = 'italic';
+            msgEl.innerText = text;
+            chatMessages.appendChild(msgEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
         function getNeighbors(coord) {
             const col = columns.indexOf(coord[0]), row = parseInt(coord.substring(1));
@@ -507,10 +630,6 @@
             boardHistory.push(serializeBoard(boardState));
         }
 
-        // ─────────────────────────────────────────────
-        // Game Flow & Networking
-        // ─────────────────────────────────────────────
-
         function isMyTurn() {
             if (isGameOver) return false;
             if (currentMode === '1p') return currentTurnColor === 'black' && !isSelfPlayActive;
@@ -522,10 +641,9 @@
         function updateStatusUI() {
             if (isGameOver) return;
 
-            // ADDED: Check if self-play is active first
             if (isSelfPlayActive) {
                 statusEl.innerText = `${currentTurnColor === 'black' ? 'Black' : 'White'} thinking...`;
-                return; // Stop here so it doesn't run the other mode texts
+                return;
             }
             
             if (currentMode === '1p') {
@@ -547,7 +665,6 @@
             drawBoard();
         }
 
-        // Handles clicks from the canvas (Places a stone)
         async function handleBoardClick(coord) {
             if (!isMyTurn()) return;
 
@@ -561,7 +678,7 @@
             
             if (currentMode === '2p_online') {
                 ws.send(JSON.stringify({ type: 'move', action: 'play', coord: coord, color: colorPlayed }));
-                advanceTurn(); // Predict locally immediately
+                advanceTurn(); 
             } else {
                 advanceTurn();
                 if (currentMode === '1p') {
@@ -570,15 +687,13 @@
             }
         }
 
-        // Handles UI buttons (Pass / Resign)
-        async function playerAction(actionType) { // 'PASS' or 'RESIGN'
+        async function playerAction(actionType) {
             if (!isMyTurn()) return;
 
             const colorPlayed = currentTurnColor;
             
             if (currentMode === '2p_online') {
                 ws.send(JSON.stringify({ type: 'move', action: actionType, color: colorPlayed }));
-                // Local prediction handled via network loop back for simplicity, but we can do it here:
                 applyNetworkAction(actionType, null, colorPlayed, true); 
             } else {
                 applyNetworkAction(actionType, null, colorPlayed);
@@ -588,7 +703,6 @@
             }
         }
 
-        // Applies actions triggered locally (2p_local), network (2p_online), or UI (Pass/Resign)
         async function applyNetworkAction(action, coord, color, skipSend = false) {
             if (action === 'RESIGN') {
                 endGame(color === 'black' ? 'W+R' : 'B+R');
@@ -608,7 +722,6 @@
 
             if (action === 'play') {
                 consecutivePasses = 0;
-                // If the move didn't come from my local prediction, apply it.
                 if (currentTurnColor === color) {
                     applyConfirmedMove(coord, color);
                     moveHistory.push(coord);
@@ -672,10 +785,6 @@
             drawBoard();
         }
 
-        // ─────────────────────────────────────────────
-        // Canvas Interactions (Click & Hover)
-        // ─────────────────────────────────────────────
-
         canvas.addEventListener('mousemove', (e) => {
             if (!isMyTurn()) {
                 if (hoverCoord !== null) { hoverCoord = null; drawBoard(); }
@@ -704,10 +813,6 @@
             const coord = getGoCoord(x, y);
             if (coord) handleBoardClick(coord);
         });
-
-        // ─────────────────────────────────────────────
-        // Drawing
-        // ─────────────────────────────────────────────
 
         function updateDifficultyState() { diffSelect.disabled = (moveHistory.length > 0); modeSelect.disabled = (moveHistory.length > 0 && currentMode === '2p_online'); }
 
@@ -777,9 +882,6 @@
             setTimeout(() => { if (!isGameOver) updateStatusUI(); }, 1800);
         }
 
-        // ─────────────────────────────────────────────
-        // Self-play (Only in 1P mode)
-        // ─────────────────────────────────────────────
         async function runSelfPlay() {
             if (!isSelfPlayActive) return;
             statusEl.innerText = `${currentTurnColor === 'black' ? 'Black' : 'White'} thinking...`;
@@ -837,10 +939,6 @@
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             passBtn.disabled = false;
             resignBtn.disabled = false;
-            
-            if (fullReset && currentMode === '2p_online' && ws) {
-                // Changing back and forth essentially resets the socket room natively
-            }
 
             updateStatusUI();
             drawBoard();
