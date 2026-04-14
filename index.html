@@ -444,6 +444,14 @@
         let myOnlineColor    = null; 
         let isSelfPlayActive = false;
         let ws               = null;
+        let opponentOnline   = false;
+
+        // Generate or retrieve a persistent session ID
+        let myPlayerId = localStorage.getItem('katago_player_id');
+        if (!myPlayerId) {
+            myPlayerId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('katago_player_id', myPlayerId);
+        }
 
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
@@ -499,27 +507,55 @@
 
         function connectWebSocket(roomId) {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws/${roomId}`);
+            // Pass the persistent player ID as a query parameter
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/${roomId}?player_id=${myPlayerId}`);
             
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 
                 if (msg.type === 'init') {
                     myOnlineColor = msg.color;
-                    statusEl.innerText = `Connected. You are ${myOnlineColor.toUpperCase()}. Waiting for opponent...`;
-                    appendSystemMessage(`Welcome to room! You are playing as ${myOnlineColor.toUpperCase()}`);
-                } else if (msg.type === 'start') {
+                    opponentOnline = msg.opponent_present;
                     resetGame(false); 
+                    
+                    // Replay history state if reconnecting
+                    if (msg.history && msg.history.length > 0) {
+                        msg.history.forEach(m => {
+                            if (m.type === 'move') {
+                                applyNetworkAction(m.action, m.coord, m.color, true, true);
+                            } else if (m.type === 'chat') {
+                                appendChatMessage(m.color, m.text);
+                            }
+                        });
+                        if (consecutivePasses >= 2 && !isGameOver) {
+                            finalizeGameScore();
+                        }
+                    }
+
+                    if (opponentOnline) {
+                        statusEl.innerText = `Connected! You rejoined as ${myOnlineColor.toUpperCase()}.`;
+                        appendSystemMessage("You successfully reconnected to the match.");
+                    } else {
+                        statusEl.innerText = `Connected. You are ${myOnlineColor.toUpperCase()}. Waiting for opponent...`;
+                        appendSystemMessage(`Welcome! You are ${myOnlineColor.toUpperCase()}`);
+                    }
+                    updateStatusUI();
+                    drawBoard();
+
+                } else if (msg.type === 'start') {
+                    opponentOnline = true;
                     statusEl.innerText = `Opponent joined! Game Start. ${currentTurnColor === myOnlineColor ? 'Your turn!' : "Opponent's turn."}`;
-                    appendSystemMessage("Opponent connected. Game started!");
+                    appendSystemMessage("Opponent connected.");
+                    updateStatusUI();
                 } else if (msg.type === 'move') {
                     applyNetworkAction(msg.action, msg.coord, msg.color);
                 } else if (msg.type === 'chat') {
                     appendChatMessage(msg.color, msg.text);
                 } else if (msg.type === 'opponent_disconnected') {
-                    statusEl.innerText = "Opponent disconnected.";
-                    appendSystemMessage("Your opponent disconnected.");
-                    isGameOver = true;
+                    opponentOnline = false;
+                    statusEl.innerText = "Opponent disconnected. Game paused.";
+                    appendSystemMessage("Opponent disconnected. Waiting for them to reconnect...");
+                    updateStatusUI();
                 } else if (msg.type === 'error') {
                     statusEl.innerText = msg.message;
                     ws.close();
@@ -634,7 +670,8 @@
             if (isGameOver) return false;
             if (currentMode === '1p') return currentTurnColor === 'black' && !isSelfPlayActive;
             if (currentMode === '2p_local') return true;
-            if (currentMode === '2p_online') return currentTurnColor === myOnlineColor;
+            // Prevent moves if opponent is offline in online mode
+            if (currentMode === '2p_online') return (currentTurnColor === myOnlineColor) && opponentOnline;
             return false;
         }
 
@@ -653,6 +690,8 @@
             } else if (currentMode === '2p_online') {
                 if (!myOnlineColor) {
                     statusEl.innerText = "Waiting for opponent...";
+                } else if (!opponentOnline) {
+                    statusEl.innerText = "Opponent offline. Waiting for reconnect...";
                 } else {
                     statusEl.innerText = currentTurnColor === myOnlineColor ? `Your Turn (${myOnlineColor})` : `Waiting for opponent (${currentTurnColor})...`;
                 }
@@ -703,7 +742,7 @@
             }
         }
 
-        async function applyNetworkAction(action, coord, color, skipSend = false) {
+        async function applyNetworkAction(action, coord, color, skipSend = false, isReplay = false) {
             if (action === 'RESIGN') {
                 endGame(color === 'black' ? 'W+R' : 'B+R');
                 return;
@@ -713,7 +752,8 @@
                 consecutivePasses++;
                 moveHistory.push('PASS');
                 if (consecutivePasses >= 2) {
-                    await finalizeGameScore();
+                    // Do not hit API endpoints continuously during history reconstruction
+                    if (!isReplay) await finalizeGameScore();
                 } else {
                     if (currentTurnColor === color) advanceTurn(); 
                 }
@@ -943,7 +983,6 @@
             updateStatusUI();
             drawBoard();
         }
-
     </script>
 </body>
 </html>
