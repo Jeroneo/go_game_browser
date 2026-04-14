@@ -521,6 +521,12 @@
 
         function updateStatusUI() {
             if (isGameOver) return;
+
+            // ADDED: Check if self-play is active first
+            if (isSelfPlayActive) {
+                statusEl.innerText = `${currentTurnColor === 'black' ? 'Black' : 'White'} thinking...`;
+                return; // Stop here so it doesn't run the other mode texts
+            }
             
             if (currentMode === '1p') {
                 statusEl.innerText = currentTurnColor === 'black' ? "Your Turn (Black)" : "KataGo is thinking...";
