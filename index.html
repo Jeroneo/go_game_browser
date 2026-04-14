@@ -909,8 +909,10 @@
         }
 
         function formatScore(s) {
-            if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
-            if (s.includes("R")) return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
+            if (!s || s === "PASS" || s === "Error" || s === "Unknown" || s === "B+0")
+                return "Score Settled (Unknown)";
+            if (s.includes("R"))
+                return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
             const winner = s.startsWith("B") ? "Black (黑勝)" : "White (白勝)";
             const points = s.includes("+") ? s.split("+")[1] : s;
             return `${winner} +${points} pts`;

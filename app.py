@@ -208,12 +208,24 @@ async def calculate_score(state: GameState):
         for idx, move in enumerate(state.history):
             if move.upper() != "PASS":
                 send_gtp_command(f"play {colors[idx % 2]} {move}")
-        
-        score = send_gtp_command("kata-compute-score")
-        return {"score": score}
+
+        # Try standard GTP command first, then KataGo-specific extension
+        score = None
+        try:
+            score = send_gtp_command("final_score")
+        except Exception:
+            pass
+
+        if not score or score.upper() in ("", "PASS"):
+            try:
+                score = send_gtp_command("kata-compute-score")
+            except Exception:
+                pass
+
+        return {"score": score or "B+0"}
     except Exception as e:
         print(f"Scoring error: {e}")
-        return {"score": "Unknown"}
+        return {"score": "B+0"}
 
 
 @app.websocket("/ws/{room_id}")
