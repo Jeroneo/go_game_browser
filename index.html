@@ -776,7 +776,7 @@
         // ─────────────────────────────────────────────
         async function runSelfPlay() {
             if (!isSelfPlayActive) return;
-            statusEl.innerText = `AI vs AI Thinking...`;
+            statusEl.innerText = `${currentTurnColor === 'black' ? 'Black' : 'White'} thinking...`;
             
             try {
                 const res = await fetch('/api/move', {
