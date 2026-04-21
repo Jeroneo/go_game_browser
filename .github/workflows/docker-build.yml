@@ -2,9 +2,7 @@ name: Build & Push Docker Image
 
 on:
   push:
-    # This tells GitHub to only run this workflow when a tag starting with 'v' is pushed
-    tags:
-      - 'v*' 
+    branches: [ "main", "dev" ]
 
 # Tell GitHub Actions to use the newer Node 24 to get rid of the deprecation warning
 env:
