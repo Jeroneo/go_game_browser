@@ -9,10 +9,12 @@
     <style>
         :root {
             --bg-ink: #140f0c;
+            --bg-ink-light: #241a14;
             --paper-ivory: #e8dcc4;
             --gold-accent: #c5a059;
             --red-seal: #9e2a2b;
             --wood-board: #dcb35c;
+            --wood-board-dark: #c99a45;
             --wood-dark: #2a1c15;
             --wood-border: #4a3018;
             --win-green: #55a630;
@@ -22,12 +24,10 @@
 
         body {
             font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
-            background: radial-gradient(circle at center, #241a14 0%, var(--bg-ink) 100%);
+            background: radial-gradient(circle at center, var(--bg-ink-light) 0%, var(--bg-ink) 100%);
             color: var(--paper-ivory);
             margin: 0;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden; 
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -36,138 +36,315 @@
         .layout-container {
             display: flex;
             flex-direction: row;
+            flex-wrap: nowrap; /* FORCED SIDE-BY-SIDE: Prevents left panel from jumping on top of board */
             align-items: center;
             justify-content: center;
-            gap: 60px;
+            gap: 50px; /* Slightly reduced gap to ensure it fits nicely */
             width: 100%;
-            max-width: 1300px;
-            padding: 20px;
+            max-width: 1600px; 
+            padding: 40px 20px;
         }
 
         .left-panel {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            width: 320px;
+            width: 100%;
+            max-width: 380px;
+            flex-shrink: 0; /* Prevents the control panel from squishing */
         }
 
         .header {
             text-align: center;
-            margin-bottom: 25px;
-            border-bottom: 1px solid rgba(197, 160, 89, 0.3);
-            padding-bottom: 15px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid rgba(197, 160, 89, 0.2);
+            padding-bottom: 20px;
+            position: relative;
         }
 
         .header h1 {
             margin: 0;
-            font-size: 2.8rem;
+            font-size: 3.2rem;
             color: var(--gold-accent);
-            letter-spacing: 2px;
+            letter-spacing: 4px;
             line-height: 1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
         .header .cn-title {
             display: block;
             font-family: "MingLiU", "SimSun", serif;
-            font-size: 2.2rem;
+            font-size: 2.5rem;
             color: var(--gold-accent);
-            margin: 5px 0;
-            letter-spacing: 12px;
-            padding-left: 12px;
-            opacity: 0.9;
+            margin: 10px 0;
+            letter-spacing: 16px;
+            padding-left: 16px;
+            opacity: 0.95;
         }
 
         .header p {
             margin: 5px 0 0 0;
             color: var(--paper-ivory);
-            font-size: 0.9rem;
-            letter-spacing: 3px;
-            opacity: 0.6;
+            font-size: 0.95rem;
+            letter-spacing: 4px;
+            opacity: 0.7;
             text-transform: uppercase;
         }
 
         .controls {
-            background: rgba(42, 28, 21, 0.6);
+            background: linear-gradient(180deg, rgba(42, 28, 21, 0.8) 0%, rgba(20, 15, 12, 0.8) 100%);
             border: 1px solid rgba(197, 160, 89, 0.2);
-            padding: 22px;
-            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 25px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .diff-group {
+            grid-column: span 2;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            margin-bottom: 5px;
+        }
+
+        .diff-group label {
+            font-size: 0.75rem;
+            color: var(--gold-accent);
+            margin-bottom: 6px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
 
         select {
-            background-color: var(--wood-dark);
+            background-color: var(--bg-ink);
             color: var(--paper-ivory);
-            border: 1px solid var(--gold-accent);
-            padding: 8px;
+            border: 1px solid rgba(197, 160, 89, 0.4);
+            padding: 10px 12px;
             font-family: inherit;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+            margin-bottom: 10px;
         }
-
+        
+        select:hover:not(:disabled) { border-color: var(--gold-accent); }
+        select:focus { outline: none; border-color: var(--gold-accent); }
         select:disabled { opacity: 0.5; cursor: not-allowed; }
 
+        input[type="text"] {
+            background-color: var(--bg-ink);
+            color: var(--paper-ivory);
+            border: 1px solid rgba(197, 160, 89, 0.4);
+            padding: 10px 12px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--gold-accent); }
+
         button {
-            background-color: transparent;
+            background-color: rgba(0,0,0,0.2);
             color: var(--red-seal);
-            border: 2px solid var(--red-seal);
-            padding: 8px;
+            border: 1px solid var(--red-seal);
+            padding: 12px 10px;
             font-family: "MingLiU", "SimSun", serif;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             font-weight: bold;
+            border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
         }
 
-        button:hover { background-color: var(--red-seal); color: var(--paper-ivory); }
+        button small {
+            font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+            font-weight: normal;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        button:hover:not(:disabled) { 
+            background-color: var(--red-seal); 
+            color: var(--paper-ivory); 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(158, 42, 43, 0.3);
+        }
 
         .btn-self-play { color: var(--gold-accent); border-color: var(--gold-accent); }
-        .btn-self-play:hover { background-color: var(--gold-accent); color: var(--bg-ink); }
+        .btn-self-play:hover:not(:disabled) { 
+            background-color: var(--gold-accent); 
+            color: var(--bg-ink); 
+            box-shadow: 0 4px 12px rgba(197, 160, 89, 0.3);
+        }
 
-        .btn-pass { color: #7aab8a; border-color: #7aab8a; }
-        .btn-pass:hover { background-color: #7aab8a; color: var(--bg-ink); }
-        .btn-pass:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+        .btn-pass { color: #8cb99b; border-color: #8cb99b; }
+        .btn-pass:hover:not(:disabled) { 
+            background-color: #8cb99b; 
+            color: var(--bg-ink); 
+            box-shadow: 0 4px 12px rgba(140, 185, 155, 0.3);
+        }
+        
+        button:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
         .illegal-flash { color: #e05a5a; }
 
         .status-box {
-            margin-top: 15px;
-            padding: 12px;
-            border-left: 3px solid var(--gold-accent);
-            background: rgba(0,0,0,0.4);
-            min-height: 60px;
+            margin-top: 20px;
+            padding: 15px 20px;
+            border-left: 4px solid var(--gold-accent);
+            background: linear-gradient(90deg, rgba(197, 160, 89, 0.1) 0%, rgba(0,0,0,0) 100%);
+            border-radius: 0 4px 4px 0;
+            min-height: 65px;
             display: flex;
             align-items: center;
         }
 
-        #status { font-size: 0.95rem; line-height: 1.4; }
+        #status { 
+            font-size: 1.05rem; 
+            line-height: 1.5; 
+            letter-spacing: 0.5px;
+        }
+        
         .win-highlight { color: var(--win-green); font-weight: bold; }
 
         .credits {
-            margin-top: 25px;
+            margin-top: 35px;
             text-align: center;
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             color: rgba(232, 220, 196, 0.4);
-            line-height: 1.6;
+            line-height: 1.8;
         }
 
         .credits a {
             color: var(--gold-accent);
             text-decoration: none;
-            transition: opacity 0.2s;
+            border-bottom: 1px dotted var(--gold-accent);
+            padding-bottom: 2px;
+            transition: all 0.2s;
         }
         
         .credits a:hover {
             opacity: 0.7;
+            border-bottom-style: solid;
+        }
+
+        /* --- Right Panel: Board & Chat --- */
+        .right-panel {
+            display: flex;
+            flex-direction: row; 
+            justify-content: center;
+            align-items: center;
+            gap: 30px; /* Reduced gap between board and chat */
         }
 
         .board-wrapper {
-            background: var(--wood-board);
-            border: 12px solid var(--wood-border);
-            box-shadow: 15px 15px 40px rgba(0,0,0,0.8);
+            background: linear-gradient(135deg, var(--wood-board) 0%, var(--wood-board-dark) 100%);
+            border: 14px solid var(--wood-border);
+            border-radius: 6px;
+            box-shadow: 
+                20px 20px 50px rgba(0,0,0,0.8), 
+                inset 0 0 30px rgba(0,0,0,0.2),
+                inset 0 0 10px rgba(255,255,255,0.1);
             cursor: crosshair;
+            padding: 5px;
+            flex-shrink: 0;
         }
 
-        canvas { display: block; max-width: 80vh; max-height: 80vh; }
+        canvas { 
+            display: block; 
+            max-width: 85vh; 
+            max-height: 85vh; 
+            border-radius: 2px;
+        }
+
+        /* --- Online Chat UI --- */
+        .chat-container {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            width: 320px;
+            height: 678px; 
+            max-height: 85vh; 
+            background: linear-gradient(180deg, rgba(42, 28, 21, 0.8) 0%, rgba(20, 15, 12, 0.8) 100%);
+            border: 1px solid rgba(197, 160, 89, 0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 8px;
+            flex-shrink: 1; /* Allow chat to shrink if needed */
+        }
+
+        .chat-header {
+            color: var(--gold-accent);
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(197, 160, 89, 0.2);
+            padding-bottom: 10px;
+            margin: 0;
+            text-align: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            background-color: rgba(0,0,0,0.3);
+            border: 1px solid rgba(197, 160, 89, 0.2);
+            border-radius: 4px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: var(--paper-ivory);
+            line-height: 1.4;
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input-group input {
+            flex: 1;
+            margin: 0;
+            padding: 8px 12px;
+        }
+
+        .chat-input-group button {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            flex-direction: row;
+            border-color: var(--gold-accent);
+            color: var(--gold-accent);
+        }
+
+        .chat-input-group button:hover:not(:disabled) {
+            background-color: var(--gold-accent);
+            color: var(--bg-ink);
+        }
+
+        @media (max-width: 1200px) {
+            /* If the screen is too small, stack the chat below the board, 
+               but keep the entire right-panel NEXT to the left panel */
+            .right-panel { flex-direction: column; align-items: center; }
+            .chat-container { width: 100%; height: 300px; max-width: 678px; }
+        }
+
+        @media (max-width: 900px) {
+            /* Only on mobile screens do we allow everything to finally wrap vertically */
+            .layout-container { flex-wrap: wrap; gap: 40px; padding: 20px; }
+            .left-panel { max-width: 100%; }
+            .header { margin-bottom: 20px; }
+            .board-wrapper { border-width: 8px; }
+            canvas { max-width: 100%; max-height: auto; }
+        }
     </style>
 </head>
 <body>
@@ -181,16 +358,33 @@
             </div>
 
             <div class="controls">
-                <label style="font-size: 0.75rem; color: var(--gold-accent); margin-bottom: -8px; letter-spacing: 1px;">AI STRENGTH</label>
-                <select id="difficulty">
-                    <option value="easy">Easy (10 Visits)</option>
-                    <option value="medium" selected>Medium (100 Visits)</option>
-                    <option value="hard">Hard (500 Visits)</option>
-                </select>
+                <div class="diff-group">
+                    <label for="gameMode">Game Mode</label>
+                    <select id="gameMode" onchange="handleModeChange()">
+                        <option value="1p" selected>1 Player (vs AI)</option>
+                        <option value="2p_local">2 Players (Local)</option>
+                        <option value="2p_online">2 Players (Online)</option>
+                    </select>
 
-                <button onclick="resetGame()">重新開始<br><small style="font-weight:normal; font-size: 0.7rem;">New Game</small></button>
-                <button class="btn-pass" id="passBtn" onclick="playerPass()">虛手<br><small style="font-weight:normal; font-size: 0.7rem;">Pass Turn</small></button>
-                <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<br><small style="font-weight:normal; font-size: 0.7rem;">AI Self-Play</small></button>
+                    <div id="aiDifficultyGroup">
+                        <label for="difficulty">AI Strength</label>
+                        <select id="difficulty">
+                            <option value="easy">Easy (10 Visits)</option>
+                            <option value="medium" selected>Medium (100 Visits)</option>
+                            <option value="hard">Hard (500 Visits)</option>
+                        </select>
+                    </div>
+
+                    <div id="onlineGroup" style="display: none;">
+                        <label for="roomLink">Invite Link (Click to Copy)</label>
+                        <input type="text" id="roomLink" readonly onclick="copyLink()">
+                    </div>
+                </div>
+
+                <button onclick="resetGame()">重新開始<small>New Game</small></button>
+                <button class="btn-pass" id="passBtn" onclick="playerAction('PASS')">虛手<small>Pass Turn</small></button>
+                <button class="btn-resign" id="resignBtn" onclick="playerAction('RESIGN')">投降<small>Resign</small></button>
+                <button class="btn-self-play" id="selfPlayBtn" onclick="toggleSelfPlay()">觀戰模式<small>AI Self-Play</small></button>
             </div>
             
             <div class="status-box">
@@ -208,6 +402,15 @@
             <div class="board-wrapper">
                 <canvas id="goBoard" width="650" height="650"></canvas>
             </div>
+
+            <div class="chat-container" id="chatContainer">
+                <h3 class="chat-header">Match Chat</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-group">
+                    <input type="text" id="chatInput" placeholder="Send a message..." onkeypress="handleChatKeyPress(event)">
+                    <button onclick="sendChatMessage()">Send</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -216,23 +419,184 @@
         const statusEl  = document.getElementById('status');
         const selfPlayBtn = document.getElementById('selfPlayBtn');
         const passBtn     = document.getElementById('passBtn');
+        const resignBtn   = document.getElementById('resignBtn');
         const diffSelect  = document.getElementById('difficulty');
+        const modeSelect  = document.getElementById('gameMode');
+        const onlineGroup = document.getElementById('onlineGroup');
+        const aiDiffGroup = document.getElementById('aiDifficultyGroup');
+        const roomLinkInput = document.getElementById('roomLink');
+        
+        const chatContainer = document.getElementById('chatContainer');
+        const chatMessages  = document.getElementById('chatMessages');
+        const chatInput     = document.getElementById('chatInput');
 
         const boardSize = 19, cellSize = canvas.width / (boardSize + 1), columns = "ABCDEFGHJKLMNOPQRST";
 
-        // ── Mutable game state ──
-        let boardState       = {};   // coord → 'black'|'white'
-        let moveHistory      = [];   // GTP move list sent to backend
-        let boardHistory     = [];   // serialised board after each half-move (for Ko)
+        let boardState       = {};   
+        let moveHistory      = [];   
+        let boardHistory     = [];   
         let consecutivePasses = 0;
-        let isPlayerTurn     = true;
-        let isSelfPlayActive = false;
         let isGameOver       = false;
-        let hoverCoord       = null; // Stores the current coordinate the mouse is hovering over
+        let hoverCoord       = null;
 
-        // ─────────────────────────────────────────────
-        // Go rules
-        // ─────────────────────────────────────────────
+        let currentMode      = '1p';
+        let currentTurnColor = 'black'; 
+        let myOnlineColor    = null; 
+        let isSelfPlayActive = false;
+        let ws               = null;
+        let opponentOnline   = false;
+
+        // Generate or retrieve a persistent session ID
+        let myPlayerId = localStorage.getItem('katago_player_id');
+        if (!myPlayerId) {
+            myPlayerId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('katago_player_id', myPlayerId);
+        }
+
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const roomCode = params.get('room');
+            if (roomCode) {
+                modeSelect.value = '2p_online';
+                handleModeChange(roomCode);
+            } else {
+                drawBoard();
+            }
+        };
+
+        function handleModeChange(existingRoomCode = null) {
+            currentMode = modeSelect.value;
+            
+            if (ws) { ws.close(); ws = null; }
+            
+            if (currentMode === '1p') {
+                aiDiffGroup.style.display = 'block';
+                onlineGroup.style.display = 'none';
+                selfPlayBtn.style.display = 'flex';
+                chatContainer.style.display = 'none';
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (currentMode === '2p_local') {
+                aiDiffGroup.style.display = 'none';
+                onlineGroup.style.display = 'none';
+                selfPlayBtn.style.display = 'none';
+                chatContainer.style.display = 'none';
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (currentMode === '2p_online') {
+                aiDiffGroup.style.display = 'none';
+                onlineGroup.style.display = 'block';
+                selfPlayBtn.style.display = 'none';
+                chatContainer.style.display = 'flex'; 
+                chatMessages.innerHTML = ''; 
+                
+                const roomCode = existingRoomCode || Math.random().toString(36).substring(2, 8);
+                const fullLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+                roomLinkInput.value = fullLink;
+                window.history.replaceState({}, document.title, `?room=${roomCode}`);
+                
+                connectWebSocket(roomCode);
+            }
+            resetGame();
+        }
+
+        function copyLink() {
+            roomLinkInput.select();
+            document.execCommand('copy');
+            statusEl.innerText = "Link Copied! Send it to your opponent.";
+            setTimeout(updateStatusUI, 2000);
+        }
+
+        function connectWebSocket(roomId) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            // Pass the persistent player ID as a query parameter
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/${roomId}?player_id=${myPlayerId}`);
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                
+                if (msg.type === 'init') {
+                    myOnlineColor = msg.color;
+                    opponentOnline = msg.opponent_present;
+                    resetGame(false); 
+                    
+                    // Replay history state if reconnecting
+                    if (msg.history && msg.history.length > 0) {
+                        msg.history.forEach(m => {
+                            if (m.type === 'move') {
+                                applyNetworkAction(m.action, m.coord, m.color, true, true);
+                            } else if (m.type === 'chat') {
+                                appendChatMessage(m.color, m.text);
+                            }
+                        });
+                        if (consecutivePasses >= 2 && !isGameOver) {
+                            finalizeGameScore();
+                        }
+                    }
+
+                    if (opponentOnline) {
+                        statusEl.innerText = `Connected! You rejoined as ${myOnlineColor.toUpperCase()}.`;
+                        appendSystemMessage("You successfully reconnected to the match.");
+                    } else {
+                        statusEl.innerText = `Connected. You are ${myOnlineColor.toUpperCase()}. Waiting for opponent...`;
+                        appendSystemMessage(`Welcome! You are ${myOnlineColor.toUpperCase()}`);
+                    }
+                    updateStatusUI();
+                    drawBoard();
+
+                } else if (msg.type === 'start') {
+                    opponentOnline = true;
+                    statusEl.innerText = `Opponent joined! Game Start. ${currentTurnColor === myOnlineColor ? 'Your turn!' : "Opponent's turn."}`;
+                    appendSystemMessage("Opponent connected.");
+                    updateStatusUI();
+                } else if (msg.type === 'move') {
+                    applyNetworkAction(msg.action, msg.coord, msg.color);
+                } else if (msg.type === 'chat') {
+                    appendChatMessage(msg.color, msg.text);
+                } else if (msg.type === 'opponent_disconnected') {
+                    opponentOnline = false;
+                    statusEl.innerText = "Opponent disconnected. Game paused.";
+                    appendSystemMessage("Opponent disconnected. Waiting for them to reconnect...");
+                    updateStatusUI();
+                } else if (msg.type === 'error') {
+                    statusEl.innerText = msg.message;
+                    ws.close();
+                }
+            };
+        }
+
+        function sendChatMessage() {
+            const text = chatInput.value.trim();
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'chat', color: myOnlineColor, text: text }));
+                chatInput.value = '';
+            }
+        }
+
+        function handleChatKeyPress(e) {
+            if (e.key === 'Enter') sendChatMessage();
+        }
+
+        function appendChatMessage(color, text) {
+            const msgEl = document.createElement('div');
+            msgEl.style.marginBottom = '6px';
+            const senderName = color ? color.charAt(0).toUpperCase() + color.slice(1) : 'Spectator';
+            const nameColor = color === 'black' ? '#8cb99b' : (color === 'white' ? '#e8dcc4' : '#c5a059');
+            
+            msgEl.innerHTML = `<strong style="color: ${nameColor}">${senderName}:</strong> <span class="msg-text"></span>`;
+            msgEl.querySelector('.msg-text').innerText = text;
+            
+            chatMessages.appendChild(msgEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function appendSystemMessage(text) {
+            const msgEl = document.createElement('div');
+            msgEl.style.marginBottom = '6px';
+            msgEl.style.color = '#c5a059';
+            msgEl.style.fontStyle = 'italic';
+            msgEl.innerText = text;
+            chatMessages.appendChild(msgEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
         function getNeighbors(coord) {
             const col = columns.indexOf(coord[0]), row = parseInt(coord.substring(1));
@@ -290,7 +654,7 @@
             return 'ok';
         }
 
-        function applyAIMove(coord, color) {
+        function applyConfirmedMove(coord, color) {
             boardState[coord] = color;
             const opp = color === 'black' ? 'white' : 'black';
             getNeighbors(coord).forEach(n => {
@@ -302,11 +666,195 @@
             boardHistory.push(serializeBoard(boardState));
         }
 
-        // ─────────────────────────────────────────────
-        // Drawing
-        // ─────────────────────────────────────────────
+        function isMyTurn() {
+            if (isGameOver) return false;
+            if (currentMode === '1p') return currentTurnColor === 'black' && !isSelfPlayActive;
+            if (currentMode === '2p_local') return true;
+            // Prevent moves if opponent is offline in online mode
+            if (currentMode === '2p_online') return (currentTurnColor === myOnlineColor) && opponentOnline;
+            return false;
+        }
 
-        function updateDifficultyState() { diffSelect.disabled = (moveHistory.length > 0); }
+        function updateStatusUI() {
+            if (isGameOver) return;
+
+            if (isSelfPlayActive) {
+                statusEl.innerText = `${currentTurnColor === 'black' ? 'Black' : 'White'} thinking...`;
+                return;
+            }
+            
+            if (currentMode === '1p') {
+                statusEl.innerText = currentTurnColor === 'black' ? "Your Turn (Black)" : "KataGo is thinking...";
+            } else if (currentMode === '2p_local') {
+                statusEl.innerText = `Turn: ${currentTurnColor === 'black' ? 'Black' : 'White'}`;
+            } else if (currentMode === '2p_online') {
+                if (!myOnlineColor) {
+                    statusEl.innerText = "Waiting for opponent...";
+                } else if (!opponentOnline) {
+                    statusEl.innerText = "Opponent offline. Waiting for reconnect...";
+                } else {
+                    statusEl.innerText = currentTurnColor === myOnlineColor ? `Your Turn (${myOnlineColor})` : `Waiting for opponent (${currentTurnColor})...`;
+                }
+            }
+        }
+
+        function advanceTurn() {
+            currentTurnColor = currentTurnColor === 'black' ? 'white' : 'black';
+            updateStatusUI();
+            drawBoard();
+        }
+
+        async function handleBoardClick(coord) {
+            if (!isMyTurn()) return;
+
+            const result = tryPlaceStone(coord, currentTurnColor);
+            if (result !== 'ok') { showIllegal(result); return; }
+
+            const colorPlayed = currentTurnColor;
+            consecutivePasses = 0;
+            moveHistory.push(coord);
+            hoverCoord = null;
+            
+            if (currentMode === '2p_online') {
+                ws.send(JSON.stringify({ type: 'move', action: 'play', coord: coord, color: colorPlayed }));
+                advanceTurn(); 
+            } else {
+                advanceTurn();
+                if (currentMode === '1p') {
+                    await fetchAIMove();
+                }
+            }
+        }
+
+        async function playerAction(actionType) {
+            if (!isMyTurn()) return;
+
+            const colorPlayed = currentTurnColor;
+            
+            if (currentMode === '2p_online') {
+                ws.send(JSON.stringify({ type: 'move', action: actionType, color: colorPlayed }));
+                applyNetworkAction(actionType, null, colorPlayed, true); 
+            } else {
+                applyNetworkAction(actionType, null, colorPlayed);
+                if (currentMode === '1p' && !isGameOver) {
+                    await fetchAIMove();
+                }
+            }
+        }
+
+        async function applyNetworkAction(action, coord, color, skipSend = false, isReplay = false) {
+            if (action === 'RESIGN') {
+                endGame(color === 'black' ? 'W+R' : 'B+R');
+                return;
+            }
+
+            if (action === 'PASS') {
+                consecutivePasses++;
+                moveHistory.push('PASS');
+                if (consecutivePasses >= 2) {
+                    // Do not hit API endpoints continuously during history reconstruction
+                    if (!isReplay) await finalizeGameScore();
+                } else {
+                    if (currentTurnColor === color) advanceTurn(); 
+                }
+                return;
+            }
+
+            if (action === 'play') {
+                consecutivePasses = 0;
+                if (currentTurnColor === color) {
+                    applyConfirmedMove(coord, color);
+                    moveHistory.push(coord);
+                    advanceTurn();
+                }
+            }
+        }
+
+        async function fetchAIMove() {
+            try {
+                const res = await fetch('/api/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value, board_size: boardSize })
+                });
+                const data = await res.json();
+                const ai_move = data.ai_move.toUpperCase();
+
+                if (ai_move === "RESIGN") {
+                    endGame(data.score);
+                } else if (ai_move === "PASS") {
+                    consecutivePasses++;
+                    moveHistory.push("PASS");
+                    if (consecutivePasses >= 2) endGame(data.score);
+                    else advanceTurn();
+                } else {
+                    consecutivePasses = 0;
+                    applyConfirmedMove(data.ai_move, 'white');
+                    moveHistory.push(data.ai_move);
+                    advanceTurn();
+                }
+            } catch (e) {
+                console.error(e);
+                statusEl.innerText = "Error communicating with AI.";
+            }
+        }
+
+        async function finalizeGameScore() {
+            statusEl.innerText = "Computing final score...";
+            try {
+                const res = await fetch('/api/score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: moveHistory, difficulty: 'easy', board_size: boardSize })
+                });
+                const data = await res.json();
+                endGame(data.score);
+            } catch(e) {
+                endGame("Error");
+            }
+        }
+
+        function endGame(score) {
+            isGameOver = true;
+            isSelfPlayActive = false;
+            hoverCoord = null;
+            passBtn.disabled = true;
+            resignBtn.disabled = true;
+            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
+            statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
+            drawBoard();
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isMyTurn()) {
+                if (hoverCoord !== null) { hoverCoord = null; drawBoard(); }
+                return;
+            }
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
+            const coord = getGoCoord(x, y);
+
+            if (coord !== hoverCoord) {
+                hoverCoord = coord;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            if (hoverCoord !== null) { hoverCoord = null; drawBoard(); }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!isMyTurn()) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
+            const coord = getGoCoord(x, y);
+            if (coord) handleBoardClick(coord);
+        });
+
+        function updateDifficultyState() { diffSelect.disabled = (moveHistory.length > 0); modeSelect.disabled = (moveHistory.length > 0 && currentMode === '2p_online'); }
 
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -319,17 +867,14 @@
             const hoshi = [4, 10, 16]; ctx.fillStyle = '#1a110a';
             hoshi.forEach(x => hoshi.forEach(y => { ctx.beginPath(); ctx.arc(x * cellSize, y * cellSize, 3.5, 0, 2 * Math.PI); ctx.fill(); }));
             
-            // Draw all placed stones
             Object.entries(boardState).forEach(([coord, color]) => drawStone(coord, color));
 
-            // Draw translucent hover stone
-            if (hoverCoord && !boardState[hoverCoord] && isPlayerTurn && !isGameOver && !isSelfPlayActive) {
-                ctx.globalAlpha = 0.6; // Make it semi-transparent
-                drawStone(hoverCoord, 'black');
-                ctx.globalAlpha = 1.0; // Reset alpha
+            if (hoverCoord && !boardState[hoverCoord] && isMyTurn()) {
+                ctx.globalAlpha = 0.6; 
+                drawStone(hoverCoord, currentTurnColor);
+                ctx.globalAlpha = 1.0; 
             }
 
-            // Last-move marker
             if (moveHistory.length > 0) {
                 const last = moveHistory[moveHistory.length - 1];
                 if (last.toUpperCase() !== "PASS" && boardState[last]) {
@@ -363,13 +908,11 @@
             return (col >= 0 && col < boardSize && row >= 1 && row <= boardSize) ? columns[col] + (boardSize - row + 1) : null;
         }
 
-        // ─────────────────────────────────────────────
-        // Helpers
-        // ─────────────────────────────────────────────
-
         function formatScore(s) {
-            if (!s || s === "PASS" || s === "Error") return "Score Settled (Draw/Unknown)";
-            if (s.includes("R")) return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
+            if (!s || s === "PASS" || s === "Error" || s === "Unknown" || s === "B+0")
+                return "Score Settled (Unknown)";
+            if (s.includes("R"))
+                return s.startsWith("B") ? "Black Wins by Resignation (黑中盤勝)" : "White Wins by Resignation (白中盤勝)";
             const winner = s.startsWith("B") ? "Black (黑勝)" : "White (白勝)";
             const points = s.includes("+") ? s.split("+")[1] : s;
             return `${winner} +${points} pts`;
@@ -378,59 +921,37 @@
         function showIllegal(reason) {
             const msgs = { ko: '⛔ Illegal — Ko rule', suicide: '⛔ Illegal — Suicide', occupied: '⛔ Intersection occupied' };
             statusEl.innerHTML = `<span class="illegal-flash">${msgs[reason] || '⛔ Illegal move'}</span>`;
-            setTimeout(() => { if (!isGameOver) statusEl.innerText = 'Your Turn (Black)'; }, 1800);
+            setTimeout(() => { if (!isGameOver) updateStatusUI(); }, 1800);
         }
 
-        async function fetchMove() {
+        async function runSelfPlay() {
+            if (!isSelfPlayActive) return;
+            statusEl.innerText = `${currentTurnColor === 'black' ? 'Black' : 'White'} thinking...`;
+            
             try {
                 const res = await fetch('/api/move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ history: moveHistory, difficulty: diffSelect.value, board_size: boardSize })
                 });
-                return await res.json();
-            } catch (e) { return { ai_move: "PASS", score: "Error" }; }
-        }
+                const data = await res.json();
+                const move = data.ai_move.toUpperCase();
 
-        function endGame(score) {
-            isGameOver = true;
-            isSelfPlayActive = false;
-            isPlayerTurn = false;
-            hoverCoord = null;
-            passBtn.disabled = true;
-            selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
-            statusEl.innerHTML = `<span class="win-highlight">GAME OVER:<br>${formatScore(score)}</span>`;
-            drawBoard();
-        }
-
-        // ─────────────────────────────────────────────
-        // Self-play
-        // ─────────────────────────────────────────────
-
-        async function runSelfPlay() {
-            if (!isSelfPlayActive) return;
-            const turn = moveHistory.length % 2 === 0 ? 'black' : 'white';
-            statusEl.innerText = `Thinking (${turn === 'black' ? 'Black' : 'White'})...`;
-            const data = await fetchMove();
-            const move = data.ai_move.toUpperCase();
-
-            if (move === "RESIGN") { endGame(data.score); return; }
-
-            if (move === "PASS") {
-                consecutivePasses++;
-                moveHistory.push("PASS");
-                if (consecutivePasses >= 2) { endGame(data.score); return; }
-                statusEl.innerText = `${turn === 'black' ? 'Black' : 'White'} passes...`;
-                drawBoard();
+                if (move === "RESIGN") { endGame(data.score); return; }
+                if (move === "PASS") {
+                    consecutivePasses++;
+                    moveHistory.push("PASS");
+                    if (consecutivePasses >= 2) { endGame(data.score); return; }
+                } else {
+                    consecutivePasses = 0;
+                    applyConfirmedMove(data.ai_move, currentTurnColor);
+                    moveHistory.push(data.ai_move);
+                }
+                advanceTurn();
                 setTimeout(runSelfPlay, 800);
-                return;
+            } catch (e) {
+                toggleSelfPlay();
             }
-
-            consecutivePasses = 0;
-            applyAIMove(data.ai_move, turn);
-            moveHistory.push(data.ai_move);
-            drawBoard();
-            setTimeout(runSelfPlay, 600);
         }
 
         function toggleSelfPlay() {
@@ -439,142 +960,31 @@
                 hoverCoord = null;
                 selfPlayBtn.innerHTML = "停止觀戰<br><small>Stop AI</small>";
                 passBtn.disabled = true;
-                isPlayerTurn = false;
+                resignBtn.disabled = true;
                 runSelfPlay();
             } else {
                 selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
                 passBtn.disabled = false;
-                isPlayerTurn = true;
-                statusEl.innerText = "Paused. Your Turn.";
+                resignBtn.disabled = false;
+                updateStatusUI();
             }
             drawBoard();
         }
 
-        // ─────────────────────────────────────────────
-        // Player pass
-        // ─────────────────────────────────────────────
-
-        async function playerPass() {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
-            isPlayerTurn = false;
-            hoverCoord = null;
-            drawBoard();
-            
-            consecutivePasses++;
-            moveHistory.push("PASS");
-
-            if (consecutivePasses >= 2) {
-                const data = await fetchMove(); 
-                endGame(data.score);
-                return;
-            }
-
-            statusEl.innerText = "You passed. KataGo is thinking...";
-            const data = await fetchMove();
-            const move = data.ai_move.toUpperCase();
-
-            if (move === "RESIGN") { endGame(data.score); return; }
-
-            if (move === "PASS") {
-                consecutivePasses++;
-                moveHistory.push("PASS");
-                endGame(data.score);
-                return;
-            }
-
-            consecutivePasses = 0;
-            applyAIMove(data.ai_move, 'white');
-            moveHistory.push(data.ai_move);
-            statusEl.innerText = "Your Turn (Black)";
-            isPlayerTurn = true;
-            drawBoard();
-        }
-
-        // ─────────────────────────────────────────────
-        // Canvas Interactions (Click & Hover)
-        // ─────────────────────────────────────────────
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) {
-                if (hoverCoord !== null) {
-                    hoverCoord = null;
-                    drawBoard();
-                }
-                return;
-            }
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
-            const coord = getGoCoord(x, y);
-
-            if (coord !== hoverCoord) {
-                hoverCoord = coord;
-                drawBoard();
-            }
-        });
-
-        canvas.addEventListener('mouseout', () => {
-            if (hoverCoord !== null) {
-                hoverCoord = null;
-                drawBoard();
-            }
-        });
-
-        canvas.addEventListener('click', async (e) => {
-            if (!isPlayerTurn || isSelfPlayActive || isGameOver) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
-            const coord = getGoCoord(x, y);
-            if (!coord) return;
-
-            const result = tryPlaceStone(coord, 'black');
-            if (result !== 'ok') { showIllegal(result); return; }
-
-            consecutivePasses = 0;
-            moveHistory.push(coord);
-            isPlayerTurn = false;
-            hoverCoord = null; // Clear hover immediately after placing
-            drawBoard();
-            statusEl.innerText = "KataGo is thinking...";
-
-            const data = await fetchMove();
-            const move = data.ai_move.toUpperCase();
-
-            if (move === "RESIGN") { endGame(data.score); return; }
-
-            if (move === "PASS") {
-                consecutivePasses++;
-                moveHistory.push("PASS");
-                if (consecutivePasses >= 2) { endGame(data.score); return; }
-                statusEl.innerText = "KataGo passed. Your Turn (Black)";
-            } else {
-                consecutivePasses = 0;
-                applyAIMove(data.ai_move, 'white');
-                moveHistory.push(data.ai_move);
-                statusEl.innerText = "Your Turn (Black)";
-            }
-
-            isPlayerTurn = true;
-            drawBoard();
-        });
-
-        // ─────────────────────────────────────────────
-        // Reset
-        // ─────────────────────────────────────────────
-
-        function resetGame() {
+        function resetGame(fullReset = true) {
             boardState = {}; moveHistory = []; boardHistory = [];
-            consecutivePasses = 0; isPlayerTurn = true; isSelfPlayActive = false; isGameOver = false; hoverCoord = null;
+            consecutivePasses = 0; 
+            currentTurnColor = 'black';
+            isSelfPlayActive = false; 
+            isGameOver = false; 
+            hoverCoord = null;
             selfPlayBtn.innerHTML = "觀戰模式<br><small>AI Self-Play</small>";
             passBtn.disabled = false;
-            statusEl.innerText = "Your Turn (Black)";
+            resignBtn.disabled = false;
+
+            updateStatusUI();
             drawBoard();
         }
-
-        drawBoard();
     </script>
 </body>
 </html>
