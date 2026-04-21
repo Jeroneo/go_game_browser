@@ -2,7 +2,9 @@ name: Build & Push Docker Image
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    # This tells GitHub to only run this workflow when a tag starting with 'v' is pushed
+    tags:
+      - 'v*' 
 
 # Tell GitHub Actions to use the newer Node 24 to get rid of the deprecation warning
 env:
@@ -35,7 +37,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.OWNER_LC }}/katago-web-dev:latest
+          tags: ghcr.io/${{ env.OWNER_LC }}/katago-web:latest
           
       - name: Trigger Watchtower Update
         run: |
